@@ -1,0 +1,15 @@
+*.apk
+*.apks
+*.aab
+*.har
+*.hprof
+
+.gradle/
+build/
+local.properties
+
+.idea/
+*.iml
+
+HuihutongGate/**/build/
+HuihutongGate/.gradle/
