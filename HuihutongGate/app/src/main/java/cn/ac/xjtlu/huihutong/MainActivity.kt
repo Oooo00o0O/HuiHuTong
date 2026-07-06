@@ -101,7 +101,7 @@ class MainActivity : Activity() {
             frame(-1, 58.dp(), Gravity.TOP).apply { topMargin = 48.dp() }
         )
 
-        val settings = button("\u2022\u2022\u2022   \u25ce", 18f, Color.WHITE, 0x33FFFFFF).apply {
+        val settings = capsuleButton().apply {
             setOnClickListener { showCredentialDialog() }
         }
         root.addView(settings, frame(112.dp(), 38.dp(), Gravity.TOP or Gravity.END).apply {
@@ -113,7 +113,7 @@ class MainActivity : Activity() {
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(24.dp(), 132.dp(), 24.dp(), 92.dp())
+            setPadding(24.dp(), 120.dp(), 24.dp(), 72.dp())
         }
         scroll.addView(content, FrameLayout.LayoutParams(-1, -2))
         root.addView(scroll, frame(-1, -1))
@@ -138,7 +138,7 @@ class MainActivity : Activity() {
         permissionText = label("", 20f, DEEP_BLUE, Typeface.DEFAULT_BOLD, Gravity.CENTER)
         card.addView(permissionText, linear(-1, -2).apply { topMargin = 16.dp() })
 
-        warningText = label("", 17f, RED, Typeface.DEFAULT_BOLD, Gravity.CENTER).apply {
+        warningText = label("", 16.5f, RED, Typeface.DEFAULT_BOLD, Gravity.START).apply {
             visibility = View.GONE
             setLineSpacing(2.dp().toFloat(), 1.08f)
         }
@@ -155,7 +155,7 @@ class MainActivity : Activity() {
             topMargin = 16.dp()
         })
 
-        root.addView(bottomNav(), frame(-1, 78.dp(), Gravity.BOTTOM))
+        root.addView(bottomNav(), frame(-1, 58.dp(), Gravity.BOTTOM))
         setContentView(root)
     }
 
@@ -210,9 +210,10 @@ class MainActivity : Activity() {
 
     private fun navItem(text: String, selected: Boolean, iconRes: Int): TextView {
         val color = if (selected) BLUE else NAV_GRAY
-        return label(text, 14f, color, if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT, Gravity.CENTER).apply {
+        return label(text, 12f, color, if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT, Gravity.CENTER).apply {
             setCompoundDrawablesWithIntrinsicBounds(0, iconRes, 0, 0)
-            compoundDrawablePadding = 3.dp()
+            compoundDrawablePadding = 0
+            includeFontPadding = false
             compoundDrawableTintList = ColorStateList.valueOf(color)
         }
     }
@@ -236,7 +237,7 @@ class MainActivity : Activity() {
     private fun renderSnapshot(snapshot: UiSnapshot) {
         currentInfo = snapshot.info
         currentWarning = snapshot.warningThreshold
-        apartmentText.text = snapshot.info.apartment.ifBlank { "\u6167\u6e56\u901a\u95e8\u7981" }
+        apartmentText.text = snapshot.info.apartment.ifBlank { "\u6167\u6e56\u901a\u95e8\u7981" }.withRoomComma()
         nameText.text = snapshot.info.name.ifBlank { "\u5df2\u767b\u5f55\u7528\u6237" }
         companyText.text = snapshot.info.companyName.ifBlank { "\u897f\u4ea4\u5229\u7269\u6d66\u5927\u5b66" }
         verifiedText.text = "\u5df2\u9a8c\u8bc1"
@@ -253,7 +254,7 @@ class MainActivity : Activity() {
             warningText.visibility = View.GONE
         } else {
             warningText.visibility = View.VISIBLE
-            warningText.text = "\u60a8\u6240\u767b\u8bb0\u7684\u623f\u95f4\u4f59\u989d\u5df2\u4f4e\u4e8e${threshold}\u5143\uff0c\u8bf7\u53ca\u65f6\u7f34\u8d39\u3002\n\u51cc\u66680\u70b9\u52302\u70b9\u4e3a\u7cfb\u7edf\u7ed3\u7b97\u65f6\u95f4\uff0c\u8bf7\u52ff\u5728\u8be5\u65f6\u6bb5\u8fdb\u884c\u5145\u503c!"
+            warningText.text = "\u60a8\u6240\u767b\u8bb0\u7684\u623f\u95f4\u4f59\u989d\u5df2\u4f4e\u4e8e${threshold}\u5143\uff0c\u8bf7\u53ca\u65f6\u7f34\u8d39\u3002"
         }
     }
 
@@ -395,6 +396,24 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun capsuleButton(): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            background = rounded(0x38FFFFFF, 22.dp())
+            setPadding(8.dp(), 0, 8.dp(), 0)
+            isClickable = true
+
+            addView(label("\u2022\u2022\u2022", 20f, Color.WHITE, Typeface.DEFAULT_BOLD, Gravity.CENTER).apply {
+                includeFontPadding = false
+            }, linear(48.dp(), -1))
+            addView(View(this@MainActivity).apply { setBackgroundColor(0x30FFFFFF) }, linear(1.dp(), 20.dp()))
+            addView(label("\u25ce", 20f, Color.WHITE, Typeface.DEFAULT_BOLD, Gravity.CENTER).apply {
+                includeFontPadding = false
+            }, linear(38.dp(), -1))
+        }
+    }
+
     private fun button(text: String, sizeSp: Float, textColor: Int, backgroundColor: Int): Button {
         return Button(this).apply {
             this.text = text
@@ -422,6 +441,12 @@ class MainActivity : Activity() {
 
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).roundToInt()
 
+    private fun String.withRoomComma(): String {
+        val value = trim()
+        if (value.isEmpty()) return value
+        return if (value.endsWith("\uff0c") || value.endsWith(",")) value else "$value\uff0c"
+    }
+
     private fun String.asPermissionLine(): String {
         val value = trim().ifBlank { "\u901a\u884c\u6743\u9650\u5df2\u5f00\u542f" }
         return if (value.startsWith("*")) value else "* $value"
@@ -442,13 +467,13 @@ class MainActivity : Activity() {
         const val TOKEN_REUSE_MS = 50_000L
 
         val BLUE: Int = Color.rgb(47, 134, 246)
-        val DEEP_BLUE: Int = Color.rgb(44, 91, 150)
+        val DEEP_BLUE: Int = Color.rgb(42, 96, 145)
         val LIGHT_BACKGROUND: Int = Color.rgb(245, 246, 248)
         val DARK_TEXT: Int = Color.rgb(45, 45, 48)
         val GRAY_TEXT: Int = Color.rgb(113, 116, 122)
         val NAV_GRAY: Int = Color.rgb(145, 150, 158)
         val GREEN: Int = Color.rgb(83, 180, 88)
-        val RED: Int = Color.rgb(220, 58, 47)
-        val WARNING_YELLOW: Int = Color.rgb(240, 186, 92)
+        val RED: Int = Color.rgb(213, 54, 47)
+        val WARNING_YELLOW: Int = Color.rgb(226, 158, 52)
     }
 }
