@@ -1,8 +1,9 @@
-﻿package cn.ac.xjtlu.huihutong
+package cn.ac.xjtlu.huihutong
 
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
@@ -93,26 +94,26 @@ class MainActivity : Activity() {
 
     private fun buildUi() {
         val root = FrameLayout(this).apply { setBackgroundColor(LIGHT_BACKGROUND) }
-        root.addView(View(this).apply { setBackgroundColor(BLUE) }, frame(-1, 330.dp(), Gravity.TOP))
+        root.addView(View(this).apply { setBackgroundColor(BLUE) }, frame(-1, 360.dp(), Gravity.TOP))
 
         root.addView(
-            label("\u6211\u7684\u4e8c\u7ef4\u7801", 22f, Color.WHITE, Typeface.DEFAULT_BOLD, Gravity.CENTER),
-            frame(-1, 72.dp(), Gravity.TOP)
+            label("\u6211\u7684\u4e8c\u7ef4\u7801", 20f, Color.WHITE, Typeface.DEFAULT_BOLD, Gravity.CENTER),
+            frame(-1, 58.dp(), Gravity.TOP).apply { topMargin = 48.dp() }
         )
 
-        val settings = button("\u8bbe\u7f6e", 14f, Color.WHITE, 0x3DFFFFFF).apply {
+        val settings = button("\u2022\u2022\u2022   \u25ce", 18f, Color.WHITE, 0x33FFFFFF).apply {
             setOnClickListener { showCredentialDialog() }
         }
-        root.addView(settings, frame(86.dp(), 42.dp(), Gravity.TOP or Gravity.END).apply {
-            topMargin = 14.dp()
-            rightMargin = 16.dp()
+        root.addView(settings, frame(112.dp(), 38.dp(), Gravity.TOP or Gravity.END).apply {
+            topMargin = 52.dp()
+            rightMargin = 14.dp()
         })
 
         val scroll = ScrollView(this).apply { clipToPadding = false }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(24.dp(), 98.dp(), 24.dp(), 92.dp())
+            setPadding(24.dp(), 132.dp(), 24.dp(), 92.dp())
         }
         scroll.addView(content, FrameLayout.LayoutParams(-1, -2))
         root.addView(scroll, frame(-1, -1))
@@ -120,28 +121,28 @@ class MainActivity : Activity() {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = rounded(Color.WHITE, 24.dp())
-            setPadding(24.dp(), 30.dp(), 24.dp(), 30.dp())
+            setPadding(24.dp(), 30.dp(), 24.dp(), 24.dp())
             minimumHeight = 590.dp()
         }
         content.addView(card, linear(-1, -2))
 
-        card.addView(profileBlock(), linear(-1, 150.dp()))
-        card.addView(qrBlock(), linear(280.dp(), 280.dp()).apply {
+        card.addView(profileBlock(), linear(-1, 140.dp()))
+        card.addView(qrBlock(), linear(276.dp(), 276.dp()).apply {
             gravity = Gravity.CENTER_HORIZONTAL
             topMargin = 22.dp()
         })
 
-        timeText = label("", 22f, GRAY_TEXT, Typeface.DEFAULT, Gravity.CENTER)
-        card.addView(timeText, linear(-1, -2).apply { topMargin = 32.dp() })
+        timeText = label("", 19f, GRAY_TEXT, Typeface.DEFAULT, Gravity.CENTER)
+        card.addView(timeText, linear(-1, -2).apply { topMargin = 30.dp() })
 
-        permissionText = label("", 21f, DEEP_BLUE, Typeface.DEFAULT_BOLD, Gravity.CENTER)
-        card.addView(permissionText, linear(-1, -2).apply { topMargin = 22.dp() })
+        permissionText = label("", 20f, DEEP_BLUE, Typeface.DEFAULT_BOLD, Gravity.CENTER)
+        card.addView(permissionText, linear(-1, -2).apply { topMargin = 16.dp() })
 
-        warningText = label("", 20f, RED, Typeface.DEFAULT_BOLD, Gravity.CENTER).apply {
+        warningText = label("", 17f, RED, Typeface.DEFAULT_BOLD, Gravity.CENTER).apply {
             visibility = View.GONE
-            setLineSpacing(0f, 1.05f)
+            setLineSpacing(2.dp().toFloat(), 1.08f)
         }
-        card.addView(warningText, linear(-1, -2).apply { topMargin = 16.dp() })
+        card.addView(warningText, linear(-1, -2).apply { topMargin = 12.dp() })
 
         hintText = label("", 14f, GRAY_TEXT, Typeface.DEFAULT, Gravity.CENTER)
         card.addView(hintText, linear(-1, -2).apply { topMargin = 18.dp() })
@@ -154,7 +155,7 @@ class MainActivity : Activity() {
             topMargin = 16.dp()
         })
 
-        root.addView(bottomNav(), frame(-1, 72.dp(), Gravity.BOTTOM))
+        root.addView(bottomNav(), frame(-1, 78.dp(), Gravity.BOTTOM))
         setContentView(root)
     }
 
@@ -164,17 +165,17 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        row.addView(column, frame(-1, -1).apply { rightMargin = 110.dp() })
+        row.addView(column, frame(-1, -1).apply { rightMargin = 82.dp() })
 
-        apartmentText = label("", 22f, DARK_TEXT, Typeface.DEFAULT_BOLD, Gravity.START)
-        nameText = label("", 21f, DARK_TEXT, Typeface.DEFAULT, Gravity.START)
-        companyText = label("", 21f, DARK_TEXT, Typeface.DEFAULT, Gravity.START)
+        apartmentText = label("", 19f, DARK_TEXT, Typeface.DEFAULT_BOLD, Gravity.START)
+        nameText = label("", 18.5f, DARK_TEXT, Typeface.DEFAULT, Gravity.START)
+        companyText = label("", 18.5f, DARK_TEXT, Typeface.DEFAULT, Gravity.START)
         column.addView(apartmentText, linear(-1, -2))
-        column.addView(nameText, linear(-1, -2).apply { topMargin = 14.dp() })
-        column.addView(companyText, linear(-1, -2).apply { topMargin = 14.dp() })
+        column.addView(nameText, linear(-1, -2).apply { topMargin = 10.dp() })
+        column.addView(companyText, linear(-1, -2).apply { topMargin = 10.dp() })
 
-        verifiedText = label("\u5df2\u9a8c\u8bc1", 22f, GREEN, Typeface.DEFAULT_BOLD, Gravity.CENTER)
-        row.addView(verifiedText, frame(100.dp(), 70.dp(), Gravity.END or Gravity.CENTER_VERTICAL))
+        verifiedText = label("\u5df2\u9a8c\u8bc1", 19.5f, GREEN, Typeface.DEFAULT_BOLD, Gravity.CENTER)
+        row.addView(verifiedText, frame(82.dp(), 60.dp(), Gravity.END or Gravity.CENTER_VERTICAL))
         return row
     }
 
@@ -182,10 +183,10 @@ class MainActivity : Activity() {
         val frame = FrameLayout(this).apply {
             background = GradientDrawable().apply {
                 setColor(Color.WHITE)
-                setStroke(5.dp(), WARNING_YELLOW, 10.dp().toFloat(), 7.dp().toFloat())
+                setStroke(4.dp(), WARNING_YELLOW, 10.dp().toFloat(), 7.dp().toFloat())
                 cornerRadius = 8.dp().toFloat()
             }
-            setPadding(13.dp(), 13.dp(), 13.dp(), 13.dp())
+            setPadding(12.dp(), 12.dp(), 12.dp(), 12.dp())
         }
         qrImage = ImageView(this).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
@@ -201,14 +202,19 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setBackgroundColor(Color.WHITE)
         }
-        nav.addView(navItem("\u9996\u9875", false), linear(0, -1, 1f))
-        nav.addView(navItem("\u4e8c\u7ef4\u7801", true), linear(0, -1, 1f))
-        nav.addView(navItem("\u6211\u7684", false), linear(0, -1, 1f))
+        nav.addView(navItem("\u9996\u9875", false, R.drawable.ic_nav_home), linear(0, -1, 1f))
+        nav.addView(navItem("\u4e8c\u7ef4\u7801", true, R.drawable.ic_nav_qr), linear(0, -1, 1f))
+        nav.addView(navItem("\u6211\u7684", false, R.drawable.ic_nav_user), linear(0, -1, 1f))
         return nav
     }
 
-    private fun navItem(text: String, selected: Boolean): TextView {
-        return label(text, 18f, if (selected) BLUE else NAV_GRAY, if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT, Gravity.CENTER)
+    private fun navItem(text: String, selected: Boolean, iconRes: Int): TextView {
+        val color = if (selected) BLUE else NAV_GRAY
+        return label(text, 14f, color, if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT, Gravity.CENTER).apply {
+            setCompoundDrawablesWithIntrinsicBounds(0, iconRes, 0, 0)
+            compoundDrawablePadding = 3.dp()
+            compoundDrawableTintList = ColorStateList.valueOf(color)
+        }
     }
 
     private fun renderNoCredentials() {
@@ -223,6 +229,7 @@ class MainActivity : Activity() {
         permissionText.setTextColor(GRAY_TEXT)
         warningText.visibility = View.GONE
         hintText.text = "\u70b9\u53f3\u4e0a\u89d2\u201c\u8bbe\u7f6e\u201d\uff0c\u7c98\u8d34 openId=...&unionId=... \u6216\u53ea\u7c98\u8d34 openId\u3002"
+        refreshButton.visibility = View.VISIBLE
         refreshButton.isEnabled = false
     }
 
@@ -238,8 +245,8 @@ class MainActivity : Activity() {
         timeText.text = dateFormat.format(Date(snapshot.fetchedAtMillis))
         permissionText.text = snapshot.info.permissionText.asPermissionLine()
         permissionText.setTextColor(DEEP_BLUE)
-        refreshButton.isEnabled = true
-        hintText.text = "\u4e8c\u7ef4\u7801\u7ea6\u6bcf 10 \u79d2\u5237\u65b0\uff1b\u672c\u9875\u9762\u4f1a\u81ea\u52a8\u8c03\u9ad8\u4eae\u5ea6\u3002"
+        refreshButton.visibility = View.GONE
+        hintText.visibility = View.GONE
 
         val threshold = snapshot.warningThreshold
         if (threshold.isNullOrBlank()) {
@@ -252,6 +259,7 @@ class MainActivity : Activity() {
 
     private fun renderError(error: Throwable) {
         val message = error.message ?: error.javaClass.simpleName
+        hintText.visibility = View.VISIBLE
         hintText.text = "\u5237\u65b0\u5931\u8d25\uff1a$message"
         permissionText.text = "* \u5237\u65b0\u5931\u8d25"
         permissionText.setTextColor(RED)
@@ -270,6 +278,7 @@ class MainActivity : Activity() {
             return
         }
         if (!inFlight.compareAndSet(false, true)) return
+        refreshButton.visibility = if (currentInfo == null) View.VISIBLE else View.GONE
         refreshButton.isEnabled = false
         hintText.text = if (full || currentInfo == null) {
             "\u6b63\u5728\u767b\u5f55\u5e76\u52a0\u8f7d\u4e8c\u7ef4\u7801..."
