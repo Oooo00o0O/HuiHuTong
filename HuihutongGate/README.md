@@ -4,7 +4,7 @@ Native Android/Kotlin standalone gate QR app for the Huihutong flow.
 
 ## Build
 
-This project intentionally avoids Flutter, Compose, AndroidX, OkHttp, and other app runtime dependencies. It only needs the Android Gradle Plugin and Kotlin Gradle Plugin during build.
+This project intentionally avoids Flutter, Compose, AndroidX, OkHttp, and other app runtime dependencies. It only needs the Android Gradle Plugin during build. AGP 9.0 provides Kotlin Android support directly, so `org.jetbrains.kotlin.android` should not be applied separately.
 
 Local SDK path is stored in `local.properties` and is intentionally not committed:
 
@@ -12,16 +12,17 @@ Local SDK path is stored in `local.properties` and is intentionally not committe
 sdk.dir=D\:\\Programs\\Andriod\\Sdk
 ```
 
+Use Android Studio's bundled JBR 21 as the Gradle JDK. In Android Studio this is under `Settings > Build, Execution, Deployment > Build Tools > Gradle > Gradle JDK`; choose `D:\Program Files\Android\Android Studio\jbr` or the bundled/embedded JDK option.
+
 If Gradle has not cached the build plugins yet, open `HuihutongGate` in Android Studio and run Gradle Sync, or run:
 
 ```powershell
-gradle assembleDebug
+$env:JAVA_HOME='D:\Program Files\Android\Android Studio\jbr'; gradle assembleDebug
 ```
 
-Expected build-time plugins:
+Expected build-time plugin:
 
 - `com.android.application:9.0.0`
-- `org.jetbrains.kotlin.android:2.2.20`
 
 ## Runtime Scope
 
