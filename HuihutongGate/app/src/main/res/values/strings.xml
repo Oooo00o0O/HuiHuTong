@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">慧湖通门禁</string>
+    <string name="settings_content_description">设置</string>
 </resources>

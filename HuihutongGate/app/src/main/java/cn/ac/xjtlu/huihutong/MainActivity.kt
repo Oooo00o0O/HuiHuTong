@@ -5,15 +5,20 @@ import android.app.AlertDialog
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.Color
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
+import android.view.TouchDelegate
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
@@ -28,13 +33,18 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.roundToInt
 
 class MainActivity : Activity() {
-    private val api = HuihutongApi()
+    private val dataLoader = GateDataLoader(HuihutongApi())
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val executor = Executors.newSingleThreadExecutor()
+    private val coreExecutor = Executors.newSingleThreadExecutor()
+    private val warningExecutor = Executors.newSingleThreadExecutor()
     private val inFlight = AtomicBoolean(false)
+    private val destroyed = AtomicBoolean(false)
+    private val coreGeneration = AtomicLong(0L)
+    private val warningGeneration = AtomicLong(0L)
     private val dateFormat = SimpleDateFormat("yyyy\u5e74MM\u6708dd\u65e5 HH:mm:ss", Locale.CHINA)
 
     private lateinit var apartmentText: TextView
@@ -49,21 +59,32 @@ class MainActivity : Activity() {
     private lateinit var refreshButton: Button
 
     @Volatile private var credentials: Credentials? = null
-    @Volatile private var session: LoginSession? = null
     @Volatile private var currentInfo: CodeInfo? = null
+    @Volatile private var currentSession: LoginSession? = null
     @Volatile private var currentWarning: String? = null
     private var previousBrightness: Float = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
 
+    private val clockRunnable = object : Runnable {
+        override fun run() {
+            if (::timeText.isInitialized && currentInfo != null) {
+                timeText.text = dateFormat.format(Date())
+            }
+            mainHandler.postDelayed(this, CLOCK_TICK_INTERVAL_MS)
+        }
+    }
+
     private val refreshRunnable = object : Runnable {
         override fun run() {
-            refresh(full = currentInfo == null)
-            mainHandler.postDelayed(this, QR_REFRESH_INTERVAL_MS)
+            if (!destroyed.get() && currentInfo != null) {
+                refresh(RefreshMode.QR_ONLY)
+            }
+            if (!destroyed.get()) mainHandler.postDelayed(this, QR_REFRESH_INTERVAL_MS)
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = BLUE
+        window.statusBarColor = PRIMARY_BLUE
         window.navigationBarColor = Color.WHITE
         buildUi()
         credentials = loadCredentials()
@@ -71,49 +92,47 @@ class MainActivity : Activity() {
             renderNoCredentials()
             mainHandler.post { showCredentialDialog() }
         } else {
-            refresh(full = true)
+            refresh(RefreshMode.FULL)
         }
     }
 
     override fun onResume() {
         super.onResume()
         applyHighBrightness()
+        startClockLoop()
         if (credentials != null) startRefreshLoop()
     }
 
     override fun onPause() {
         super.onPause()
         mainHandler.removeCallbacks(refreshRunnable)
+        mainHandler.removeCallbacks(clockRunnable)
         restoreBrightness()
     }
 
     override fun onDestroy() {
+        destroyed.set(true)
+        coreGeneration.incrementAndGet()
+        warningGeneration.incrementAndGet()
+        mainHandler.removeCallbacksAndMessages(null)
+        coreExecutor.shutdownNow()
+        warningExecutor.shutdownNow()
         super.onDestroy()
-        executor.shutdownNow()
     }
 
     private fun buildUi() {
-        val root = FrameLayout(this).apply { setBackgroundColor(LIGHT_BACKGROUND) }
-        root.addView(View(this).apply { setBackgroundColor(BLUE) }, frame(-1, 360.dp(), Gravity.TOP))
+        val root = FrameLayout(this).apply { setBackgroundColor(PAGE_BACKGROUND) }
+        root.addView(View(this).apply {
+            background = bottomRounded(HERO_BLUE, 40.dp())
+        }, frame(-1, 350.dp(), Gravity.TOP))
+        root.addView(View(this).apply { setBackgroundColor(PRIMARY_BLUE) }, frame(-1, 100.dp(), Gravity.TOP))
 
-        root.addView(
-            label("\u6211\u7684\u4e8c\u7ef4\u7801", 20f, Color.WHITE, Typeface.DEFAULT_BOLD, Gravity.CENTER),
-            frame(-1, 58.dp(), Gravity.TOP).apply { topMargin = 48.dp() }
-        )
-
-        val settings = capsuleButton().apply {
-            setOnClickListener { showCredentialDialog() }
-        }
-        root.addView(settings, frame(112.dp(), 38.dp(), Gravity.TOP or Gravity.END).apply {
-            topMargin = 52.dp()
-            rightMargin = 14.dp()
-        })
 
         val scroll = ScrollView(this).apply { clipToPadding = false }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(24.dp(), 120.dp(), 24.dp(), 72.dp())
+            setPadding(24.dp(), 136.dp(), 24.dp(), 72.dp())
         }
         scroll.addView(content, FrameLayout.LayoutParams(-1, -2))
         root.addView(scroll, frame(-1, -1))
@@ -129,7 +148,7 @@ class MainActivity : Activity() {
         card.addView(profileBlock(), linear(-1, 140.dp()))
         card.addView(qrBlock(), linear(276.dp(), 276.dp()).apply {
             gravity = Gravity.CENTER_HORIZONTAL
-            topMargin = 22.dp()
+            topMargin = 6.dp()
         })
 
         timeText = label("", 19f, GRAY_TEXT, Typeface.DEFAULT, Gravity.CENTER)
@@ -147,13 +166,33 @@ class MainActivity : Activity() {
         hintText = label("", 14f, GRAY_TEXT, Typeface.DEFAULT, Gravity.CENTER)
         card.addView(hintText, linear(-1, -2).apply { topMargin = 18.dp() })
 
-        refreshButton = button("\u7acb\u5373\u5237\u65b0", 15f, Color.WHITE, BLUE).apply {
-            setOnClickListener { refresh(full = true) }
+        refreshButton = button("\u624b\u52a8\u5237\u65b0", 13f, Color.WHITE, PRIMARY_BLUE).apply {
+            setOnClickListener { refresh(RefreshMode.FULL) }
         }
-        card.addView(refreshButton, linear(130.dp(), 42.dp()).apply {
+        card.addView(refreshButton, linear(112.dp(), 34.dp()).apply {
             gravity = Gravity.CENTER_HORIZONTAL
-            topMargin = 16.dp()
+            topMargin = 8.dp()
         })
+
+        root.addView(
+            label("\u6211\u7684\u4e8c\u7ef4\u7801", 20f, Color.WHITE, Typeface.DEFAULT_BOLD, Gravity.CENTER),
+            frame(-1, 58.dp(), Gravity.TOP).apply { topMargin = 48.dp() }
+        )
+
+        val settings = capsuleButton().apply {
+            setOnClickListener { showCredentialDialog() }
+        }
+        root.addView(settings, frame(96.dp(), 34.dp(), Gravity.TOP or Gravity.END).apply {
+            topMargin = 52.dp()
+            rightMargin = 14.dp()
+        })
+        settings.post {
+            val touchBounds = Rect().also(settings::getHitRect)
+            val verticalExpansion = ((48.dp() - settings.height).coerceAtLeast(0)) / 2
+            touchBounds.inset(0, -verticalExpansion)
+            root.touchDelegate = TouchDelegate(touchBounds, settings)
+        }
+
 
         root.addView(bottomNav(), frame(-1, 58.dp(), Gravity.BOTTOM))
         setContentView(root)
@@ -209,7 +248,7 @@ class MainActivity : Activity() {
     }
 
     private fun navItem(text: String, selected: Boolean, iconRes: Int): TextView {
-        val color = if (selected) BLUE else NAV_GRAY
+        val color = if (selected) PRIMARY_BLUE else NAV_GRAY
         return label(text, 12f, color, if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT, Gravity.CENTER).apply {
             setCompoundDrawablesWithIntrinsicBounds(0, iconRes, 0, 0)
             compoundDrawablePadding = 0
@@ -234,10 +273,10 @@ class MainActivity : Activity() {
         refreshButton.isEnabled = false
     }
 
-    private fun renderSnapshot(snapshot: UiSnapshot) {
+    private fun renderCoreSnapshot(snapshot: CoreSnapshot) {
         currentInfo = snapshot.info
-        currentWarning = snapshot.warningThreshold
-        apartmentText.text = snapshot.info.apartment.ifBlank { "\u6167\u6e56\u901a\u95e8\u7981" }.withRoomComma()
+        currentSession = snapshot.session
+        apartmentText.text = snapshot.info.apartment.ifBlank { "\u6167\u6e56\u901a\u95e8\u7981" }.withoutTrailingComma()
         nameText.text = snapshot.info.name.ifBlank { "\u5df2\u767b\u5f55\u7528\u6237" }
         companyText.text = snapshot.info.companyName.ifBlank { "\u897f\u4ea4\u5229\u7269\u6d66\u5927\u5b66" }
         verifiedText.text = "\u5df2\u9a8c\u8bc1"
@@ -246,15 +285,34 @@ class MainActivity : Activity() {
         timeText.text = dateFormat.format(Date(snapshot.fetchedAtMillis))
         permissionText.text = snapshot.info.permissionText.asPermissionLine()
         permissionText.setTextColor(DEEP_BLUE)
-        refreshButton.visibility = View.GONE
+        refreshButton.visibility = View.VISIBLE
+        refreshButton.isEnabled = true
         hintText.visibility = View.GONE
+    }
 
-        val threshold = snapshot.warningThreshold
+    private fun renderWarning(threshold: String?) {
+        currentWarning = threshold
         if (threshold.isNullOrBlank()) {
             warningText.visibility = View.GONE
         } else {
             warningText.visibility = View.VISIBLE
             warningText.text = "\u60a8\u6240\u767b\u8bb0\u7684\u623f\u95f4\u4f59\u989d\u5df2\u4f4e\u4e8e${threshold}\u5143\uff0c\u8bf7\u53ca\u65f6\u7f34\u8d39\u3002"
+        }
+    }
+
+    private fun loadWarning(session: LoginSession, generation: Long) {
+        if (destroyed.get()) return
+        warningExecutor.execute {
+            try {
+                val threshold = dataLoader.loadWarning(session)
+                mainHandler.post {
+                    if (!destroyed.get() && generation == warningGeneration.get() && session == currentSession) {
+                        renderWarning(threshold)
+                    }
+                }
+            } catch (_: Throwable) {
+                // The last successful warning remains visible; warning failures are non-critical.
+            }
         }
     }
 
@@ -267,63 +325,72 @@ class MainActivity : Activity() {
         refreshButton.isEnabled = true
     }
 
+    private fun startClockLoop() {
+        mainHandler.removeCallbacks(clockRunnable)
+        mainHandler.post(clockRunnable)
+    }
+
     private fun startRefreshLoop() {
         mainHandler.removeCallbacks(refreshRunnable)
         mainHandler.postDelayed(refreshRunnable, QR_REFRESH_INTERVAL_MS)
     }
 
-    private fun refresh(full: Boolean) {
+    private fun refresh(mode: RefreshMode) {
+        if (destroyed.get()) return
+        val infoAtRequest = currentInfo
+        if (mode == RefreshMode.QR_ONLY && infoAtRequest == null) return
         val creds = credentials
         if (creds == null) {
             renderNoCredentials()
             return
         }
         if (!inFlight.compareAndSet(false, true)) return
-        refreshButton.visibility = if (currentInfo == null) View.VISIBLE else View.GONE
+        val requestGeneration = coreGeneration.get()
+        val needsFullLoad = mode == RefreshMode.FULL
+        val nextWarningGeneration = if (needsFullLoad) warningGeneration.incrementAndGet() else null
+        refreshButton.visibility = View.VISIBLE
         refreshButton.isEnabled = false
-        hintText.text = if (full || currentInfo == null) {
+        hintText.text = if (needsFullLoad) {
             "\u6b63\u5728\u767b\u5f55\u5e76\u52a0\u8f7d\u4e8c\u7ef4\u7801..."
         } else {
             "\u6b63\u5728\u5237\u65b0\u4e8c\u7ef4\u7801..."
         }
 
-        executor.execute {
+        coreExecutor.execute {
             try {
-                val snapshot = loadSnapshot(creds, full || currentInfo == null)
+                val core = dataLoader.loadCore(creds, needsFullLoad, infoAtRequest)
+                val snapshot = CoreSnapshot(
+                    info = core.info,
+                    qrBitmap = QrCodeBitmap.create(core.qrPayload, 760),
+                    fetchedAtMillis = System.currentTimeMillis(),
+                    session = core.session
+                )
                 mainHandler.post {
                     inFlight.set(false)
-                    renderSnapshot(snapshot)
+                    if (!isCurrentCoreRequest(requestGeneration, creds)) {
+                        if (!destroyed.get() && credentials != null) refresh(RefreshMode.FULL)
+                        return@post
+                    }
+                    renderCoreSnapshot(snapshot)
+                    if (nextWarningGeneration != null) {
+                        loadWarning(snapshot.session, nextWarningGeneration)
+                    }
                 }
             } catch (error: Throwable) {
                 mainHandler.post {
                     inFlight.set(false)
+                    if (!isCurrentCoreRequest(requestGeneration, creds)) {
+                        if (!destroyed.get() && credentials != null) refresh(RefreshMode.FULL)
+                        return@post
+                    }
                     renderError(error)
                 }
             }
         }
     }
 
-    private fun loadSnapshot(creds: Credentials, full: Boolean): UiSnapshot {
-        return try {
-            loadSnapshotWithSession(ensureSession(creds), full)
-        } catch (expired: HuihutongApi.AuthExpiredException) {
-            session = null
-            loadSnapshotWithSession(ensureSession(creds), full = true)
-        }
-    }
-
-    private fun loadSnapshotWithSession(activeSession: LoginSession, full: Boolean): UiSnapshot {
-        val info = if (full) api.loadCodeInfo(activeSession) else currentInfo ?: api.loadCodeInfo(activeSession)
-        val qrPayload = api.loadQrCode(activeSession).ifBlank { info.qrCode }
-        require(qrPayload.isNotBlank()) { "\u63a5\u53e3\u6ca1\u6709\u8fd4\u56de\u4e8c\u7ef4\u7801\u5185\u5bb9" }
-        val warning = if (full) api.loadPowerWarning(activeSession) else currentWarning
-        return UiSnapshot(info, warning, QrCodeBitmap.create(qrPayload, 760), System.currentTimeMillis())
-    }
-
-    private fun ensureSession(creds: Credentials): LoginSession {
-        val cached = session
-        if (cached != null && System.currentTimeMillis() - cached.loginAtMillis < TOKEN_REUSE_MS) return cached
-        return api.login(creds).also { session = it }
+    private fun isCurrentCoreRequest(generation: Long, requestCredentials: Credentials): Boolean {
+        return !destroyed.get() && generation == coreGeneration.get() && requestCredentials == credentials
     }
 
     private fun showCredentialDialog() {
@@ -346,11 +413,15 @@ class MainActivity : Activity() {
                 try {
                     val parsed = CredentialParser.parse(input.text.toString())
                     saveCredentials(parsed)
+                    coreGeneration.incrementAndGet()
                     credentials = parsed
-                    session = null
+                    warningGeneration.incrementAndGet()
+                    dataLoader.clearSession()
+                    warningText.visibility = View.GONE
                     currentInfo = null
+                    currentSession = null
                     currentWarning = null
-                    refresh(full = true)
+                    refresh(RefreshMode.FULL)
                     startRefreshLoop()
                     Toast.makeText(this, "\u53c2\u6570\u5df2\u4fdd\u5b58", Toast.LENGTH_SHORT).show()
                 } catch (error: IllegalArgumentException) {
@@ -396,21 +467,52 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun capsuleButton(): LinearLayout {
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            background = rounded(0x38FFFFFF, 22.dp())
-            setPadding(8.dp(), 0, 8.dp(), 0)
-            isClickable = true
+    private fun capsuleButton(): View {
+        return object : View(this) {
+            private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                style = Paint.Style.FILL
+            }
+            private val separatorPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0x30FFFFFF
+                strokeWidth = 1.dp().toFloat()
+            }
+            private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                style = Paint.Style.STROKE
+                strokeWidth = 2.0f.dp()
+            }
 
-            addView(label("\u2022\u2022\u2022", 20f, Color.WHITE, Typeface.DEFAULT_BOLD, Gravity.CENTER).apply {
-                includeFontPadding = false
-            }, linear(48.dp(), -1))
-            addView(View(this@MainActivity).apply { setBackgroundColor(0x30FFFFFF) }, linear(1.dp(), 20.dp()))
-            addView(label("\u25ce", 20f, Color.WHITE, Typeface.DEFAULT_BOLD, Gravity.CENTER).apply {
-                includeFontPadding = false
-            }, linear(38.dp(), -1))
+            init {
+                background = RippleDrawable(
+                    ColorStateList.valueOf(0x30FFFFFF),
+                    rounded(SETTINGS_BLUE, 17.dp()),
+                    rounded(Color.WHITE, 17.dp())
+                )
+                contentDescription = getString(R.string.settings_content_description)
+                isClickable = true
+                isFocusable = true
+            }
+
+            override fun getAccessibilityClassName(): CharSequence = Button::class.java.name
+
+            override fun onDraw(canvas: Canvas) {
+                super.onDraw(canvas)
+                val cy = height / 2f
+                val dotRadius = 1.8f.dp()
+                val firstDotX = 17.dp().toFloat()
+                val dotGap = 9.dp().toFloat()
+                repeat(3) { index ->
+                    canvas.drawCircle(firstDotX + dotGap * index.toFloat(), cy, dotRadius, fill)
+                }
+
+                val separatorX = 51.dp().toFloat()
+                canvas.drawLine(separatorX, cy - 10.dp().toFloat(), separatorX, cy + 10.dp().toFloat(), separatorPaint)
+
+                val ringCenterX = 75.dp().toFloat()
+                canvas.drawCircle(ringCenterX, cy, 8.dp().toFloat(), ringPaint)
+                canvas.drawCircle(ringCenterX, cy, 2.8f.dp(), fill)
+            }
         }
     }
 
@@ -431,7 +533,19 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun frame(width: Int, height: Int, gravityValue: Int = Gravity.NO_GRAVITY): FrameLayout.LayoutParams {
+    private fun bottomRounded(color: Int, radiusPx: Int): GradientDrawable {
+        val radius = radiusPx.toFloat()
+        return GradientDrawable().apply {
+            setColor(color)
+            cornerRadii = floatArrayOf(0f, 0f, 0f, 0f, radius, radius, radius, radius)
+        }
+    }
+
+    private fun frame(
+        width: Int,
+        height: Int,
+        gravityValue: Int = Gravity.NO_GRAVITY
+    ): FrameLayout.LayoutParams {
         return FrameLayout.LayoutParams(width, height, gravityValue)
     }
 
@@ -441,22 +555,22 @@ class MainActivity : Activity() {
 
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).roundToInt()
 
-    private fun String.withRoomComma(): String {
-        val value = trim()
-        if (value.isEmpty()) return value
-        return if (value.endsWith("\uff0c") || value.endsWith(",")) value else "$value\uff0c"
-    }
+    private fun Float.dp(): Float = this * resources.displayMetrics.density
+
+    private fun String.withoutTrailingComma(): String = trim().trimEnd('\uff0c', ',', ' ', '\u3000')
 
     private fun String.asPermissionLine(): String {
         val value = trim().ifBlank { "\u901a\u884c\u6743\u9650\u5df2\u5f00\u542f" }
         return if (value.startsWith("*")) value else "* $value"
     }
 
-    private data class UiSnapshot(
+    private enum class RefreshMode { FULL, QR_ONLY }
+
+    private data class CoreSnapshot(
         val info: CodeInfo,
-        val warningThreshold: String?,
         val qrBitmap: Bitmap,
-        val fetchedAtMillis: Long
+        val fetchedAtMillis: Long,
+        val session: LoginSession
     )
 
     private companion object {
@@ -464,11 +578,12 @@ class MainActivity : Activity() {
         const val KEY_OPEN_ID = "open_id"
         const val KEY_UNION_ID = "union_id"
         const val QR_REFRESH_INTERVAL_MS = 10_000L
-        const val TOKEN_REUSE_MS = 50_000L
-
-        val BLUE: Int = Color.rgb(47, 134, 246)
+        const val CLOCK_TICK_INTERVAL_MS = 1_000L
+        val PRIMARY_BLUE: Int = Color.rgb(43, 130, 254)
+        val HERO_BLUE: Int = Color.rgb(52, 139, 255)
+        val SETTINGS_BLUE: Int = Color.rgb(32, 104, 203)
         val DEEP_BLUE: Int = Color.rgb(42, 96, 145)
-        val LIGHT_BACKGROUND: Int = Color.rgb(245, 246, 248)
+        val PAGE_BACKGROUND: Int = Color.rgb(247, 248, 250)
         val DARK_TEXT: Int = Color.rgb(45, 45, 48)
         val GRAY_TEXT: Int = Color.rgb(113, 116, 122)
         val NAV_GRAY: Int = Color.rgb(145, 150, 158)

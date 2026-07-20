@@ -22,13 +22,21 @@ data class CodeInfo(
     val qrCode: String
 )
 
+interface GateApi {
+    fun login(credentials: Credentials): LoginSession
+    fun loadCodeInfo(session: LoginSession): CodeInfo
+    fun loadQrCode(session: LoginSession): String
+    fun loadPowerWarning(session: LoginSession): String?
+}
+
+class AuthExpiredException(message: String) : RuntimeException(message)
+
 class HuihutongApi(
     private val baseUrl: String = "https://api.215123.cn"
-) {
+) : GateApi {
     class ApiException(message: String) : RuntimeException(message)
-    class AuthExpiredException(message: String) : RuntimeException(message)
 
-    fun login(credentials: Credentials): LoginSession {
+    override fun login(credentials: Credentials): LoginSession {
         val params = linkedMapOf("openId" to credentials.openId)
         val unionId = credentials.unionId
         if (!unionId.isNullOrBlank()) {
@@ -45,7 +53,7 @@ class HuihutongApi(
         )
     }
 
-    fun loadCodeInfo(session: LoginSession): CodeInfo {
+    override fun loadCodeInfo(session: LoginSession): CodeInfo {
         val json = getJson("/pms/welcome/make-code-info", tokenSession = session)
         val data = json.optJSONObject("data") ?: throw ApiException("二维码信息响应为空")
         return CodeInfo(
@@ -57,7 +65,7 @@ class HuihutongApi(
         )
     }
 
-    fun loadQrCode(session: LoginSession): String {
+    override fun loadQrCode(session: LoginSession): String {
         val json = getJson("/pms/welcome/make-qrcode", tokenSession = session)
         val data = json.opt("data")
         return when (data) {
@@ -67,7 +75,7 @@ class HuihutongApi(
         }
     }
 
-    fun loadPowerWarning(session: LoginSession): String? {
+    override fun loadPowerWarning(session: LoginSession): String? {
         val json = getJson("/pms/welcome/power-warning", tokenSession = session)
         val data = json.opt("data")
         if (data == null || data == JSONObject.NULL) return null
