@@ -99,6 +99,8 @@ openId=你的值&unionId=你的值
 
 ## 许可证
 
-本项目代码以 [GNU General Public License v3.0 only](LICENSE) 发布。分发本项目或其修改版本时，必须遵守 GPL-3.0 的源代码和许可证要求。
+除第三方许可另有说明的代码外，本项目代码以 [GNU General Public License v3.0 only](LICENSE) 发布。分发本项目或其修改版本时，必须遵守 GPL-3.0 的源代码和许可证要求。
+
+内置二维码编码器的部分实现改编自 MIT 许可的 Project Nayuki QR Code generator；完整版权和许可声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 GPL 仅适用于本项目作者有权许可的代码，不授予任何第三方服务、接口、名称、商标、数据或素材的权利。
