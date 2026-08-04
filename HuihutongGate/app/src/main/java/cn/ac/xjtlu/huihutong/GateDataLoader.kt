@@ -1,5 +1,12 @@
 package cn.ac.xjtlu.huihutong
 
+sealed interface SupplementalUpdate {
+    data class PowerWarningLoaded(val threshold: String?) : SupplementalUpdate
+    data object PowerWarningFailed : SupplementalUpdate
+    data class RoomBalanceLoaded(val snapshot: RoomBalanceSnapshot) : SupplementalUpdate
+    data object RoomBalanceFailed : SupplementalUpdate
+}
+
 data class CoreLoad(
     val info: CodeInfo,
     val qrPayload: String,
@@ -20,8 +27,27 @@ class GateDataLoader(
         cachedSession = null
     }
 
-    fun loadWarning(session: LoginSession): String? {
-        return api.loadPowerWarning(session)
+    fun loadSupplemental(
+        session: LoginSession,
+        room: RoomReference?
+    ): Sequence<SupplementalUpdate> = sequence {
+        val warningUpdate = try {
+            SupplementalUpdate.PowerWarningLoaded(api.loadPowerWarning(session))
+        } catch (_: Exception) {
+            SupplementalUpdate.PowerWarningFailed
+        }
+        yield(warningUpdate)
+        if (room != null) {
+            val balanceUpdate = try {
+                val amount = api.loadRoomBalance(session, room)
+                SupplementalUpdate.RoomBalanceLoaded(
+                    RoomBalanceSnapshot(amount = amount, queriedAtMillis = nowMillis())
+                )
+            } catch (_: Exception) {
+                SupplementalUpdate.RoomBalanceFailed
+            }
+            yield(balanceUpdate)
+        }
     }
 
     fun loadCore(

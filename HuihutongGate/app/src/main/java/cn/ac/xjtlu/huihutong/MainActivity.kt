@@ -40,12 +40,13 @@ class MainActivity : Activity() {
     private val dataLoader = GateDataLoader(HuihutongApi())
     private val mainHandler = Handler(Looper.getMainLooper())
     private val coreExecutor = Executors.newSingleThreadExecutor()
-    private val warningExecutor = Executors.newSingleThreadExecutor()
+    private val supplementalExecutor = Executors.newSingleThreadExecutor()
     private val inFlight = AtomicBoolean(false)
     private val destroyed = AtomicBoolean(false)
     private val coreGeneration = AtomicLong(0L)
-    private val warningGeneration = AtomicLong(0L)
+    private val supplementalGeneration = AtomicLong(0L)
     private val dateFormat = SimpleDateFormat("yyyy\u5e74MM\u6708dd\u65e5 HH:mm:ss", Locale.CHINA)
+    private val queryTimeFormat = SimpleDateFormat("HH:mm", Locale.CHINA)
 
     private lateinit var apartmentText: TextView
     private lateinit var nameText: TextView
@@ -55,13 +56,13 @@ class MainActivity : Activity() {
     private lateinit var timeText: TextView
     private lateinit var permissionText: TextView
     private lateinit var warningText: TextView
+    private lateinit var balanceText: TextView
     private lateinit var hintText: TextView
     private lateinit var refreshButton: Button
 
-    @Volatile private var credentials: Credentials? = null
+    @Volatile private var settings: AppSettings? = null
     @Volatile private var currentInfo: CodeInfo? = null
     @Volatile private var currentSession: LoginSession? = null
-    @Volatile private var currentWarning: String? = null
     private var previousBrightness: Float = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
 
     private val clockRunnable = object : Runnable {
@@ -87,10 +88,10 @@ class MainActivity : Activity() {
         window.statusBarColor = PRIMARY_BLUE
         window.navigationBarColor = Color.WHITE
         buildUi()
-        credentials = loadCredentials()
-        if (credentials == null) {
+        settings = loadSettings()
+        if (settings == null) {
             renderNoCredentials()
-            mainHandler.post { showCredentialDialog() }
+            mainHandler.post { showSettingsDialog() }
         } else {
             refresh(RefreshMode.FULL)
         }
@@ -100,7 +101,7 @@ class MainActivity : Activity() {
         super.onResume()
         applyHighBrightness()
         startClockLoop()
-        if (credentials != null) startRefreshLoop()
+        if (settings != null) startRefreshLoop()
     }
 
     override fun onPause() {
@@ -113,10 +114,10 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         destroyed.set(true)
         coreGeneration.incrementAndGet()
-        warningGeneration.incrementAndGet()
+        supplementalGeneration.incrementAndGet()
         mainHandler.removeCallbacksAndMessages(null)
         coreExecutor.shutdownNow()
-        warningExecutor.shutdownNow()
+        supplementalExecutor.shutdownNow()
         super.onDestroy()
     }
 
@@ -163,6 +164,11 @@ class MainActivity : Activity() {
         }
         card.addView(warningText, linear(-1, -2).apply { topMargin = 12.dp() })
 
+        balanceText = label("", 15f, GRAY_TEXT, Typeface.DEFAULT, Gravity.CENTER).apply {
+            visibility = View.GONE
+        }
+        card.addView(balanceText, linear(-1, -2).apply { topMargin = 8.dp() })
+
         hintText = label("", 14f, GRAY_TEXT, Typeface.DEFAULT, Gravity.CENTER)
         card.addView(hintText, linear(-1, -2).apply { topMargin = 18.dp() })
 
@@ -180,7 +186,7 @@ class MainActivity : Activity() {
         )
 
         val settings = capsuleButton().apply {
-            setOnClickListener { showCredentialDialog() }
+            setOnClickListener { showSettingsDialog() }
         }
         root.addView(settings, frame(96.dp(), 34.dp(), Gravity.TOP or Gravity.END).apply {
             topMargin = 52.dp()
@@ -259,7 +265,7 @@ class MainActivity : Activity() {
 
     private fun renderNoCredentials() {
         apartmentText.text = "\u8bf7\u5bfc\u5165\u6167\u6e56\u901a\u53c2\u6570"
-        nameText.text = "\u652f\u6301 openId / unionId"
+        nameText.text = "Open ID \u5fc5\u586b\uff0cUnion ID \u53ef\u9009"
         companyText.text = "\u53c2\u6570\u4ec5\u4fdd\u5b58\u5728\u672c\u673a"
         verifiedText.text = "\u672a\u767b\u5f55"
         verifiedText.setTextColor(GRAY_TEXT)
@@ -268,7 +274,8 @@ class MainActivity : Activity() {
         permissionText.text = "* \u7b49\u5f85\u5bfc\u5165"
         permissionText.setTextColor(GRAY_TEXT)
         warningText.visibility = View.GONE
-        hintText.text = "\u70b9\u53f3\u4e0a\u89d2\u201c\u8bbe\u7f6e\u201d\uff0c\u7c98\u8d34 openId=...&unionId=... \u6216\u53ea\u7c98\u8d34 openId\u3002"
+        balanceText.visibility = View.GONE
+        hintText.text = "\u70b9\u53f3\u4e0a\u89d2\u201c\u8bbe\u7f6e\u201d\uff0c\u586b\u5199 Open ID \u540e\u4fdd\u5b58\u3002"
         refreshButton.visibility = View.VISIBLE
         refreshButton.isEnabled = false
     }
@@ -291,7 +298,6 @@ class MainActivity : Activity() {
     }
 
     private fun renderWarning(threshold: String?) {
-        currentWarning = threshold
         if (threshold.isNullOrBlank()) {
             warningText.visibility = View.GONE
         } else {
@@ -300,18 +306,34 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun loadWarning(session: LoginSession, generation: Long) {
+    private fun renderRoomBalance(snapshot: RoomBalanceSnapshot) {
+        balanceText.text = snapshot.displayText(
+            queriedAt = queryTimeFormat.format(Date(snapshot.queriedAtMillis))
+        )
+        balanceText.visibility = View.VISIBLE
+    }
+
+    private fun loadSupplemental(
+        session: LoginSession,
+        room: RoomReference?,
+        generation: Long
+    ) {
         if (destroyed.get()) return
-        warningExecutor.execute {
-            try {
-                val threshold = dataLoader.loadWarning(session)
+        supplementalExecutor.execute {
+            dataLoader.loadSupplemental(session, room).forEach { update ->
                 mainHandler.post {
-                    if (!destroyed.get() && generation == warningGeneration.get() && session == currentSession) {
-                        renderWarning(threshold)
+                    if (!destroyed.get() &&
+                        generation == supplementalGeneration.get() &&
+                        session == currentSession
+                    ) {
+                        when (update) {
+                            is SupplementalUpdate.PowerWarningLoaded -> renderWarning(update.threshold)
+                            is SupplementalUpdate.RoomBalanceLoaded -> renderRoomBalance(update.snapshot)
+                            SupplementalUpdate.PowerWarningFailed,
+                            SupplementalUpdate.RoomBalanceFailed -> Unit
+                        }
                     }
                 }
-            } catch (_: Throwable) {
-                // The last successful warning remains visible; warning failures are non-critical.
             }
         }
     }
@@ -339,15 +361,16 @@ class MainActivity : Activity() {
         if (destroyed.get()) return
         val infoAtRequest = currentInfo
         if (mode == RefreshMode.QR_ONLY && infoAtRequest == null) return
-        val creds = credentials
-        if (creds == null) {
+        val requestSettings = settings
+        if (requestSettings == null) {
             renderNoCredentials()
             return
         }
         if (!inFlight.compareAndSet(false, true)) return
         val requestGeneration = coreGeneration.get()
         val needsFullLoad = mode == RefreshMode.FULL
-        val nextWarningGeneration = if (needsFullLoad) warningGeneration.incrementAndGet() else null
+        val nextSupplementalGeneration =
+            if (needsFullLoad) supplementalGeneration.incrementAndGet() else null
         refreshButton.visibility = View.VISIBLE
         refreshButton.isEnabled = false
         hintText.text = if (needsFullLoad) {
@@ -358,7 +381,11 @@ class MainActivity : Activity() {
 
         coreExecutor.execute {
             try {
-                val core = dataLoader.loadCore(creds, needsFullLoad, infoAtRequest)
+                val core = dataLoader.loadCore(
+                    requestSettings.credentials,
+                    needsFullLoad,
+                    infoAtRequest
+                )
                 val snapshot = CoreSnapshot(
                     info = core.info,
                     qrBitmap = QrCodeBitmap.create(core.qrPayload, 760),
@@ -367,20 +394,24 @@ class MainActivity : Activity() {
                 )
                 mainHandler.post {
                     inFlight.set(false)
-                    if (!isCurrentCoreRequest(requestGeneration, creds)) {
-                        if (!destroyed.get() && credentials != null) refresh(RefreshMode.FULL)
+                    if (!isCurrentCoreRequest(requestGeneration, requestSettings)) {
+                        if (!destroyed.get() && settings != null) refresh(RefreshMode.FULL)
                         return@post
                     }
                     renderCoreSnapshot(snapshot)
-                    if (nextWarningGeneration != null) {
-                        loadWarning(snapshot.session, nextWarningGeneration)
+                    if (nextSupplementalGeneration != null) {
+                        loadSupplemental(
+                            session = snapshot.session,
+                            room = requestSettings.roomReference,
+                            generation = nextSupplementalGeneration
+                        )
                     }
                 }
             } catch (error: Throwable) {
                 mainHandler.post {
                     inFlight.set(false)
-                    if (!isCurrentCoreRequest(requestGeneration, creds)) {
-                        if (!destroyed.get() && credentials != null) refresh(RefreshMode.FULL)
+                    if (!isCurrentCoreRequest(requestGeneration, requestSettings)) {
+                        if (!destroyed.get() && settings != null) refresh(RefreshMode.FULL)
                         return@post
                     }
                     renderError(error)
@@ -389,61 +420,143 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun isCurrentCoreRequest(generation: Long, requestCredentials: Credentials): Boolean {
-        return !destroyed.get() && generation == coreGeneration.get() && requestCredentials == credentials
+    private fun isCurrentCoreRequest(generation: Long, requestSettings: AppSettings): Boolean {
+        return !destroyed.get() &&
+            generation == coreGeneration.get() &&
+            requestSettings == settings
     }
 
-    private fun showCredentialDialog() {
-        val input = EditText(this).apply {
-            minLines = 4
-            maxLines = 8
-            gravity = Gravity.TOP or Gravity.START
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-            hint = "openId=...&unionId=...\nJSON / openId"
-            setText(credentials?.let { if (it.unionId.isNullOrBlank()) it.openId else "openId=${it.openId}&unionId=${it.unionId}" } ?: "")
-            setSelection(text.length)
+    private fun showSettingsDialog() {
+        val current = settings
+        val openIdInput = settingsInput(
+            hint = "Open ID\uff08\u5fc5\u586b\uff09",
+            value = current?.credentials?.openId.orEmpty()
+        )
+        val unionIdInput = settingsInput(
+            hint = "Union ID\uff08\u53ef\u9009\uff09",
+            value = current?.credentials?.unionId.orEmpty()
+        )
+        val apartmentIdInput = settingsInput(
+            hint = "Apartment ID",
+            value = current?.apartmentId.orEmpty(),
+            numeric = true
+        )
+        val roomIdInput = settingsInput(
+            hint = "Room ID",
+            value = current?.roomId.orEmpty(),
+            numeric = true
+        )
+
+        val roomRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(apartmentIdInput, linear(0, 48.dp(), 1f).apply { rightMargin = 6.dp() })
+            addView(roomIdInput, linear(0, 48.dp(), 1f).apply { leftMargin = 6.dp() })
+        }
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24.dp(), 0, 24.dp(), 0)
+            addView(openIdInput, linear(-1, 48.dp()))
+            addView(unionIdInput, linear(-1, 48.dp()).apply { topMargin = 10.dp() })
+            addView(
+                label(
+                    "\u623f\u95f4\u4f59\u989d\uff08\u586b\u5199\u4e24\u4e2a\u7f16\u53f7\u540e\u542f\u7528\uff09",
+                    13f,
+                    GRAY_TEXT,
+                    Typeface.DEFAULT,
+                    Gravity.START
+                ),
+                linear(-1, -2).apply { topMargin = 18.dp(); bottomMargin = 6.dp() }
+            )
+            addView(roomRow, linear(-1, 48.dp()))
         }
 
-        AlertDialog.Builder(this)
-            .setTitle("\u5bfc\u5165\u6167\u6e56\u901a\u53c2\u6570")
-            .setMessage("\u5f53\u524d\u5c0f\u7a0b\u5e8f\u6293\u5305\u5efa\u8bae\u540c\u65f6\u63d0\u4f9b openId \u548c unionId\uff1b\u5982\u679c\u53ea\u6709 openId\uff0c\u4e5f\u53ef\u4ee5\u5148\u4fdd\u5b58\u5c1d\u8bd5\u3002")
-            .setView(input)
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("\u8bbe\u7f6e\u6167\u6e56\u901a\u53c2\u6570")
+            .setMessage("Open ID \u5fc5\u586b\uff0cUnion ID \u53ef\u9009\u3002Apartment ID \u548c Room ID \u540c\u65f6\u586b\u5199\u65f6\u542f\u7528\u623f\u95f4\u4f59\u989d\u3002")
+            .setView(form)
             .setNegativeButton("\u53d6\u6d88", null)
-            .setPositiveButton("\u4fdd\u5b58") { _, _ ->
-                try {
-                    val parsed = CredentialParser.parse(input.text.toString())
-                    saveCredentials(parsed)
-                    coreGeneration.incrementAndGet()
-                    credentials = parsed
-                    warningGeneration.incrementAndGet()
-                    dataLoader.clearSession()
-                    warningText.visibility = View.GONE
-                    currentInfo = null
-                    currentSession = null
-                    currentWarning = null
-                    refresh(RefreshMode.FULL)
-                    startRefreshLoop()
-                    Toast.makeText(this, "\u53c2\u6570\u5df2\u4fdd\u5b58", Toast.LENGTH_SHORT).show()
-                } catch (error: IllegalArgumentException) {
-                    Toast.makeText(this, error.message ?: "\u53c2\u6570\u683c\u5f0f\u9519\u8bef", Toast.LENGTH_LONG).show()
-                    renderNoCredentials()
+            .setPositiveButton("\u4fdd\u5b58", null)
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val parsed = try {
+                    AppSettings.fromInput(
+                        openId = openIdInput.text.toString(),
+                        unionId = unionIdInput.text.toString(),
+                        apartmentId = apartmentIdInput.text.toString(),
+                        roomId = roomIdInput.text.toString()
+                    )
+                } catch (error: SettingsValidationException) {
+                    val invalidInput = when (error.field) {
+                        SettingsField.OPEN_ID -> openIdInput
+                        SettingsField.APARTMENT_ID -> apartmentIdInput
+                        SettingsField.ROOM_ID -> roomIdInput
+                    }
+                    invalidInput.error = error.message
+                    invalidInput.requestFocus()
+                    return@setOnClickListener
                 }
+
+                dialog.dismiss()
+                if (parsed == settings) return@setOnClickListener
+
+                saveSettings(parsed)
+                coreGeneration.incrementAndGet()
+                supplementalGeneration.incrementAndGet()
+                settings = parsed
+                dataLoader.clearSession()
+                warningText.visibility = View.GONE
+                balanceText.visibility = View.GONE
+                currentInfo = null
+                currentSession = null
+                refresh(RefreshMode.FULL)
+                startRefreshLoop()
+                Toast.makeText(this, "\u53c2\u6570\u5df2\u4fdd\u5b58", Toast.LENGTH_SHORT).show()
             }
-            .show()
+        }
+        dialog.show()
     }
 
-    private fun loadCredentials(): Credentials? {
+    private fun settingsInput(hint: String, value: String, numeric: Boolean = false): EditText {
+        return EditText(this).apply {
+            isSingleLine = true
+            this.hint = hint
+            inputType = if (numeric) {
+                InputType.TYPE_CLASS_NUMBER
+            } else {
+                InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+            }
+            setText(value)
+            setPadding(12.dp(), 0, 12.dp(), 0)
+            background = GradientDrawable().apply {
+                setColor(Color.WHITE)
+                setStroke(1.dp(), INPUT_BORDER)
+                cornerRadius = 8.dp().toFloat()
+            }
+        }
+    }
+
+    private fun loadSettings(): AppSettings? {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val openId = prefs.getString(KEY_OPEN_ID, null)?.takeIf { it.isNotBlank() } ?: return null
-        val unionId = prefs.getString(KEY_UNION_ID, null)?.takeIf { it.isNotBlank() }
-        return Credentials(openId, unionId)
+        val unionId = prefs.getString(KEY_UNION_ID, "").orEmpty()
+        val apartmentId = prefs.getString(KEY_APARTMENT_ID, "").orEmpty()
+        val roomId = prefs.getString(KEY_ROOM_ID, "").orEmpty()
+        return try {
+            AppSettings.fromInput(openId, unionId, apartmentId, roomId)
+        } catch (_: SettingsValidationException) {
+            AppSettings.fromInput(openId, unionId, "", "")
+        }
     }
 
-    private fun saveCredentials(value: Credentials) {
+    private fun saveSettings(value: AppSettings) {
         getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
-            .putString(KEY_OPEN_ID, value.openId)
-            .putString(KEY_UNION_ID, value.unionId ?: "")
+            .putString(KEY_OPEN_ID, value.credentials.openId)
+            .putString(KEY_UNION_ID, value.credentials.unionId ?: "")
+            .putString(KEY_APARTMENT_ID, value.apartmentId ?: "")
+            .putString(KEY_ROOM_ID, value.roomId ?: "")
             .apply()
     }
 
@@ -577,6 +690,8 @@ class MainActivity : Activity() {
         const val PREFS_NAME = "huihutong_gate"
         const val KEY_OPEN_ID = "open_id"
         const val KEY_UNION_ID = "union_id"
+        const val KEY_APARTMENT_ID = "apartment_id"
+        const val KEY_ROOM_ID = "room_id"
         const val QR_REFRESH_INTERVAL_MS = 10_000L
         const val CLOCK_TICK_INTERVAL_MS = 1_000L
         val PRIMARY_BLUE: Int = Color.rgb(43, 130, 254)
@@ -590,5 +705,6 @@ class MainActivity : Activity() {
         val GREEN: Int = Color.rgb(83, 180, 88)
         val RED: Int = Color.rgb(213, 54, 47)
         val WARNING_YELLOW: Int = Color.rgb(226, 158, 52)
+        val INPUT_BORDER: Int = Color.rgb(205, 209, 216)
     }
 }

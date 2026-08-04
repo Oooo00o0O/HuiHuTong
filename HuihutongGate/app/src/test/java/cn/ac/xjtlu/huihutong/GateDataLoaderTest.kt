@@ -1,5 +1,6 @@
 package cn.ac.xjtlu.huihutong
 
+import java.math.BigDecimal
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
@@ -23,6 +24,11 @@ class GateDataLoaderTest {
                 override fun loadPowerWarning(session: LoginSession): String? {
                     error("warning must not be part of a core load")
                 }
+
+                override fun loadRoomBalance(
+                    session: LoginSession,
+                    room: RoomReference
+                ): BigDecimal = error("room balance must not be part of a core load")
             },
             nowMillis = { 1_001L }
         )
@@ -40,20 +46,103 @@ class GateDataLoaderTest {
     }
 
     @Test
-    fun `warning can be loaded independently after core content`() {
+    fun `room balance loads after power warning`() {
+        val session = LoginSession("satoken", "token", loginAtMillis = 1_000L)
+        var warningFinished = false
+        val loader = GateDataLoader(
+            api = object : GateApi {
+                override fun login(credentials: Credentials): LoginSession = error("unused")
+                override fun loadCodeInfo(session: LoginSession): CodeInfo = error("unused")
+                override fun loadQrCode(session: LoginSession): String = error("unused")
+                override fun loadPowerWarning(session: LoginSession): String? {
+                    warningFinished = true
+                    return "10.00"
+                }
+
+                override fun loadRoomBalance(
+                    session: LoginSession,
+                    room: RoomReference
+                ): BigDecimal {
+                    check(warningFinished) { "room balance started before power warning finished" }
+                    return BigDecimal("8.75")
+                }
+            },
+            nowMillis = { 1_234L }
+        )
+
+        val updates = loader.loadSupplemental(
+            session = session,
+            room = RoomReference(apartmentId = "1", roomId = "9626")
+        ).toList()
+
+        assertEquals(
+            listOf(
+                SupplementalUpdate.PowerWarningLoaded("10.00"),
+                SupplementalUpdate.RoomBalanceLoaded(
+                    RoomBalanceSnapshot(amount = BigDecimal("8.75"), queriedAtMillis = 1_234L)
+                )
+            ),
+            updates
+        )
+    }
+
+    @Test
+    fun `room balance still loads when power warning fails`() {
         val session = LoginSession("satoken", "token", loginAtMillis = 1_000L)
         val loader = GateDataLoader(
             api = object : GateApi {
                 override fun login(credentials: Credentials): LoginSession = error("unused")
                 override fun loadCodeInfo(session: LoginSession): CodeInfo = error("unused")
                 override fun loadQrCode(session: LoginSession): String = error("unused")
-                override fun loadPowerWarning(session: LoginSession) = "50"
+                override fun loadPowerWarning(session: LoginSession): String? = error("warning unavailable")
+                override fun loadRoomBalance(session: LoginSession, room: RoomReference) =
+                    BigDecimal("8.75")
+            },
+            nowMillis = { 1_234L }
+        )
+
+        val updates = loader.loadSupplemental(
+            session = session,
+            room = RoomReference(apartmentId = "1", roomId = "9626")
+        ).toList()
+
+        assertEquals(
+            listOf(
+                SupplementalUpdate.PowerWarningFailed,
+                SupplementalUpdate.RoomBalanceLoaded(
+                    RoomBalanceSnapshot(amount = BigDecimal("8.75"), queriedAtMillis = 1_234L)
+                )
+            ),
+            updates
+        )
+    }
+
+    @Test
+    fun `room balance failure does not discard a loaded power warning`() {
+        val session = LoginSession("satoken", "token", loginAtMillis = 1_000L)
+        val loader = GateDataLoader(
+            api = object : GateApi {
+                override fun login(credentials: Credentials): LoginSession = error("unused")
+                override fun loadCodeInfo(session: LoginSession): CodeInfo = error("unused")
+                override fun loadQrCode(session: LoginSession): String = error("unused")
+                override fun loadPowerWarning(session: LoginSession) = "10.00"
+                override fun loadRoomBalance(session: LoginSession, room: RoomReference): BigDecimal =
+                    error("balance unavailable")
             }
         )
 
-        val warning = loader.loadWarning(session)
+        val updates = loader.loadSupplemental(
+            session = session,
+            room = RoomReference(apartmentId = "1", roomId = "9626")
+        ).toList()
 
-        assertEquals("50", warning)
+        assertEquals(
+            listOf(
+                SupplementalUpdate.PowerWarningLoaded("10.00"),
+                SupplementalUpdate.RoomBalanceFailed
+            ),
+            updates
+        )
     }
 
     @Test
@@ -82,6 +171,10 @@ class GateDataLoaderTest {
 
                 override fun loadQrCode(session: LoginSession) = "qr-${session.token}"
                 override fun loadPowerWarning(session: LoginSession): String? = error("unused")
+                override fun loadRoomBalance(
+                    session: LoginSession,
+                    room: RoomReference
+                ): BigDecimal = error("unused")
             },
             nowMillis = { 1_001L }
         )
@@ -128,6 +221,10 @@ class GateDataLoaderTest {
                 }
 
                 override fun loadPowerWarning(session: LoginSession): String? = error("unused")
+                override fun loadRoomBalance(
+                    session: LoginSession,
+                    room: RoomReference
+                ): BigDecimal = error("unused")
             },
             nowMillis = { 1_001L }
         )
@@ -152,6 +249,10 @@ class GateDataLoaderTest {
 
                 override fun loadQrCode(session: LoginSession) = "fresh-qr"
                 override fun loadPowerWarning(session: LoginSession): String? = error("unused")
+                override fun loadRoomBalance(
+                    session: LoginSession,
+                    room: RoomReference
+                ): BigDecimal = error("unused")
             },
             nowMillis = { 1_001L }
         )

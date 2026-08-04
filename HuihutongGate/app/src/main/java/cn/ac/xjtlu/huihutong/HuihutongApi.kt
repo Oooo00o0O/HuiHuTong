@@ -1,6 +1,7 @@
 package cn.ac.xjtlu.huihutong
 
 import org.json.JSONObject
+import java.math.BigDecimal
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
@@ -27,6 +28,7 @@ interface GateApi {
     fun loadCodeInfo(session: LoginSession): CodeInfo
     fun loadQrCode(session: LoginSession): String
     fun loadPowerWarning(session: LoginSession): String?
+    fun loadRoomBalance(session: LoginSession, room: RoomReference): BigDecimal
 }
 
 class AuthExpiredException(message: String) : RuntimeException(message)
@@ -81,6 +83,20 @@ class HuihutongApi(
         if (data == null || data == JSONObject.NULL) return null
         val value = data.toString().trim()
         return value.ifBlank { null }
+    }
+
+    override fun loadRoomBalance(session: LoginSession, room: RoomReference): BigDecimal {
+        val json = getJson(
+            path = "/proxy/qy/sdcz/getRoomBalance",
+            params = mapOf("apartmentId" to room.apartmentId, "roomId" to room.roomId),
+            tokenSession = session
+        )
+        val result = json.opt("result")
+        if (result == null || result == JSONObject.NULL) {
+            throw ApiException("房间余额响应为空")
+        }
+        return result.toString().trim().toBigDecimalOrNull()
+            ?: throw ApiException("房间余额格式错误")
     }
 
     private fun getJson(
