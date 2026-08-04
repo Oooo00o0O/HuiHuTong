@@ -1,4 +1,4 @@
-package cn.ac.xjtlu.huihutong
+package io.github.oooo00o0o.huihutong
 
 import java.math.BigDecimal
 import org.junit.Assert.assertEquals

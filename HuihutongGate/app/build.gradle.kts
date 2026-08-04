@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "cn.ac.xjtlu.huihutong"
+    namespace = "io.github.oooo00o0o.huihutong"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "cn.ac.xjtlu.huihutong"
+        applicationId = "io.github.oooo00o0o.huihutong"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

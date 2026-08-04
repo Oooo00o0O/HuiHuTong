@@ -1,4 +1,4 @@
-package cn.ac.xjtlu.huihutong
+package io.github.oooo00o0o.huihutong
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

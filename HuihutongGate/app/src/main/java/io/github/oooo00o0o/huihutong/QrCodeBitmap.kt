@@ -3,7 +3,7 @@
  * Copyright © 2025 Project Nayuki. Licensed under the MIT License.
  * See the repository's THIRD_PARTY_NOTICES.md for the complete notice.
  */
-package cn.ac.xjtlu.huihutong
+package io.github.oooo00o0o.huihutong
 
 import android.graphics.Bitmap
 import android.graphics.Color

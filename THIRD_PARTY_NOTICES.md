@@ -2,7 +2,7 @@
 
 ## QR Code Generator Library
 
-Portions of `HuihutongGate/app/src/main/java/cn/ac/xjtlu/huihutong/QrCodeBitmap.kt` are adapted from the QR Code generator library by Project Nayuki:
+Portions of `HuihutongGate/app/src/main/java/io/github/oooo00o0o/huihutong/QrCodeBitmap.kt` are adapted from the QR Code generator library by Project Nayuki:
 
 - Copyright © 2025 Project Nayuki
 - Source: <https://www.nayuki.io/page/qr-code-generator-library>

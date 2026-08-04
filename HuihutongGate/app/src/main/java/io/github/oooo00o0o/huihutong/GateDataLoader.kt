@@ -1,4 +1,4 @@
-package cn.ac.xjtlu.huihutong
+package io.github.oooo00o0o.huihutong
 
 sealed interface SupplementalUpdate {
     data class PowerWarningLoaded(val threshold: String?) : SupplementalUpdate

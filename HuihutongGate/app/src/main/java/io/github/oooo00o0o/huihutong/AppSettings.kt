@@ -1,4 +1,4 @@
-package cn.ac.xjtlu.huihutong
+package io.github.oooo00o0o.huihutong
 
 enum class SettingsField { OPEN_ID, APARTMENT_ID, ROOM_ID }
 
