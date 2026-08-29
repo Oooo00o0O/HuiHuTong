@@ -31,9 +31,7 @@ interface GateApi {
 
 class AuthExpiredException(message: String) : RuntimeException(message)
 
-class HuihutongApi(
-    private val baseUrl: String = "https://api.215123.cn"
-) : GateApi {
+class HuihutongApi : GateApi {
     class ApiException(message: String) : RuntimeException(message)
 
     override fun login(credentials: Credentials): LoginSession {
@@ -102,7 +100,7 @@ class HuihutongApi(
         params: Map<String, String> = emptyMap(),
         tokenSession: LoginSession? = null
     ): JSONObject {
-        val url = URL(baseUrl + path + params.toQueryString())
+        val url = URL(BASE_URL + path + params.toQueryString())
         val connection = (url.openConnection() as HttpsURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 15_000
@@ -163,6 +161,7 @@ class HuihutongApi(
     }
 
     private companion object {
+        const val BASE_URL = "https://api.215123.cn"
         const val REFERER = "https://servicewechat.com/wx2660b404a3b7575a/158/page-frame.html"
         const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Mobile MicroMessenger/8.0.50 MiniProgramEnv/android"

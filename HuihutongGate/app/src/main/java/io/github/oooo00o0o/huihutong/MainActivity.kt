@@ -83,8 +83,6 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = PRIMARY_BLUE
-        window.navigationBarColor = Color.WHITE
         buildUi()
         settings = loadSettings()
         if (settings == null) {
@@ -327,8 +325,6 @@ class MainActivity : Activity() {
                         when (update) {
                             is SupplementalUpdate.PowerWarningLoaded -> renderWarning(update.threshold)
                             is SupplementalUpdate.RoomBalanceLoaded -> renderRoomBalance(update.snapshot)
-                            SupplementalUpdate.PowerWarningFailed,
-                            SupplementalUpdate.RoomBalanceFailed -> Unit
                         }
                     }
                 }

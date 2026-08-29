@@ -2,9 +2,7 @@ package io.github.oooo00o0o.huihutong
 
 sealed interface SupplementalUpdate {
     data class PowerWarningLoaded(val threshold: String?) : SupplementalUpdate
-    data object PowerWarningFailed : SupplementalUpdate
     data class RoomBalanceLoaded(val snapshot: RoomBalanceSnapshot) : SupplementalUpdate
-    data object RoomBalanceFailed : SupplementalUpdate
 }
 
 data class CoreLoad(
@@ -13,10 +11,11 @@ data class CoreLoad(
     val session: LoginSession
 )
 
+private const val TOKEN_REUSE_MS = 50_000L
+
 class GateDataLoader(
     private val api: GateApi,
-    private val nowMillis: () -> Long = System::currentTimeMillis,
-    private val tokenReuseMs: Long = 50_000L
+    private val nowMillis: () -> Long = System::currentTimeMillis
 ) {
     private data class CachedSession(val credentials: Credentials, val session: LoginSession)
 
@@ -25,23 +24,21 @@ class GateDataLoader(
     fun loadSupplemental(
         session: LoginSession,
         room: RoomReference?
-    ): Sequence<SupplementalUpdate> = sequence {
-        val warningUpdate = try {
-            SupplementalUpdate.PowerWarningLoaded(api.loadPowerWarning(session))
+    ): List<SupplementalUpdate> = buildList {
+        try {
+            add(SupplementalUpdate.PowerWarningLoaded(api.loadPowerWarning(session)))
         } catch (_: Exception) {
-            SupplementalUpdate.PowerWarningFailed
         }
-        yield(warningUpdate)
         if (room != null) {
-            val balanceUpdate = try {
+            try {
                 val amount = api.loadRoomBalance(session, room)
-                SupplementalUpdate.RoomBalanceLoaded(
-                    RoomBalanceSnapshot(amount = amount, queriedAtMillis = nowMillis())
+                add(
+                    SupplementalUpdate.RoomBalanceLoaded(
+                        RoomBalanceSnapshot(amount = amount, queriedAtMillis = nowMillis())
+                    )
                 )
             } catch (_: Exception) {
-                SupplementalUpdate.RoomBalanceFailed
             }
-            yield(balanceUpdate)
         }
     }
 
@@ -76,7 +73,7 @@ class GateDataLoader(
     private fun ensureSession(credentials: Credentials): LoginSession {
         val cached = cachedSession
         if (cached != null && cached.credentials == credentials &&
-            nowMillis() - cached.session.loginAtMillis < tokenReuseMs
+            nowMillis() - cached.session.loginAtMillis < TOKEN_REUSE_MS
         ) {
             return cached.session
         }

@@ -71,7 +71,7 @@ class GateDataLoaderTest {
         val updates = loader.loadSupplemental(
             session = session,
             room = RoomReference(apartmentId = "1", roomId = "9626")
-        ).toList()
+        )
 
         assertEquals(
             listOf(
@@ -99,11 +99,10 @@ class GateDataLoaderTest {
         val updates = loader.loadSupplemental(
             session = session,
             room = RoomReference(apartmentId = "1", roomId = "9626")
-        ).toList()
+        )
 
         assertEquals(
             listOf(
-                SupplementalUpdate.PowerWarningFailed,
                 SupplementalUpdate.RoomBalanceLoaded(
                     RoomBalanceSnapshot(amount = BigDecimal("8.75"), queriedAtMillis = 1_234L)
                 )
@@ -126,12 +125,11 @@ class GateDataLoaderTest {
         val updates = loader.loadSupplemental(
             session = session,
             room = RoomReference(apartmentId = "1", roomId = "9626")
-        ).toList()
+        )
 
         assertEquals(
             listOf(
-                SupplementalUpdate.PowerWarningLoaded("10.00"),
-                SupplementalUpdate.RoomBalanceFailed
+                SupplementalUpdate.PowerWarningLoaded("10.00")
             ),
             updates
         )
