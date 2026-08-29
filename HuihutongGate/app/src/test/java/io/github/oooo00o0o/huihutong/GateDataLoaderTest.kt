@@ -5,6 +5,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
+private abstract class StubGateApi : GateApi {
+    override fun login(credentials: Credentials): LoginSession = error("unused")
+    override fun loadCodeInfo(session: LoginSession): CodeInfo = error("unused")
+    override fun loadQrCode(session: LoginSession): String = error("unused")
+    override fun loadPowerWarning(session: LoginSession): String? = error("unused")
+    override fun loadRoomBalance(session: LoginSession, room: RoomReference): BigDecimal =
+        error("unused")
+}
+
 class GateDataLoaderTest {
     @Test
     fun `core load succeeds when the warning endpoint is unavailable`() {
@@ -17,18 +26,10 @@ class GateDataLoaderTest {
             qrCode = "fallback"
         )
         val loader = GateDataLoader(
-            api = object : GateApi {
+            api = object : StubGateApi() {
                 override fun login(credentials: Credentials) = session
                 override fun loadCodeInfo(session: LoginSession) = info
                 override fun loadQrCode(session: LoginSession) = "fresh-qr"
-                override fun loadPowerWarning(session: LoginSession): String? {
-                    error("warning must not be part of a core load")
-                }
-
-                override fun loadRoomBalance(
-                    session: LoginSession,
-                    room: RoomReference
-                ): BigDecimal = error("room balance must not be part of a core load")
             },
             nowMillis = { 1_001L }
         )
@@ -50,10 +51,7 @@ class GateDataLoaderTest {
         val session = LoginSession("satoken", "token", loginAtMillis = 1_000L)
         var warningFinished = false
         val loader = GateDataLoader(
-            api = object : GateApi {
-                override fun login(credentials: Credentials): LoginSession = error("unused")
-                override fun loadCodeInfo(session: LoginSession): CodeInfo = error("unused")
-                override fun loadQrCode(session: LoginSession): String = error("unused")
+            api = object : StubGateApi() {
                 override fun loadPowerWarning(session: LoginSession): String? {
                     warningFinished = true
                     return "10.00"
@@ -90,10 +88,7 @@ class GateDataLoaderTest {
     fun `room balance still loads when power warning fails`() {
         val session = LoginSession("satoken", "token", loginAtMillis = 1_000L)
         val loader = GateDataLoader(
-            api = object : GateApi {
-                override fun login(credentials: Credentials): LoginSession = error("unused")
-                override fun loadCodeInfo(session: LoginSession): CodeInfo = error("unused")
-                override fun loadQrCode(session: LoginSession): String = error("unused")
+            api = object : StubGateApi() {
                 override fun loadPowerWarning(session: LoginSession): String? = error("warning unavailable")
                 override fun loadRoomBalance(session: LoginSession, room: RoomReference) =
                     BigDecimal("8.75")
@@ -121,10 +116,7 @@ class GateDataLoaderTest {
     fun `room balance failure does not discard a loaded power warning`() {
         val session = LoginSession("satoken", "token", loginAtMillis = 1_000L)
         val loader = GateDataLoader(
-            api = object : GateApi {
-                override fun login(credentials: Credentials): LoginSession = error("unused")
-                override fun loadCodeInfo(session: LoginSession): CodeInfo = error("unused")
-                override fun loadQrCode(session: LoginSession): String = error("unused")
+            api = object : StubGateApi() {
                 override fun loadPowerWarning(session: LoginSession) = "10.00"
                 override fun loadRoomBalance(session: LoginSession, room: RoomReference): BigDecimal =
                     error("balance unavailable")
@@ -151,7 +143,7 @@ class GateDataLoaderTest {
         val secondCredentials = Credentials("second-open-id", "second-union-id")
         val loginCalls = mutableListOf<Credentials>()
         val loader = GateDataLoader(
-            api = object : GateApi {
+            api = object : StubGateApi() {
                 override fun login(credentials: Credentials): LoginSession {
                     loginCalls += credentials
                     return LoginSession(
@@ -170,11 +162,6 @@ class GateDataLoaderTest {
                 )
 
                 override fun loadQrCode(session: LoginSession) = "qr-${session.token}"
-                override fun loadPowerWarning(session: LoginSession): String? = error("unused")
-                override fun loadRoomBalance(
-                    session: LoginSession,
-                    room: RoomReference
-                ): BigDecimal = error("unused")
             },
             nowMillis = { 1_001L }
         )
@@ -200,7 +187,7 @@ class GateDataLoaderTest {
         var loginCalls = 0
         var infoCalls = 0
         val loader = GateDataLoader(
-            api = object : GateApi {
+            api = object : StubGateApi() {
                 override fun login(credentials: Credentials): LoginSession {
                     loginCalls += 1
                     return LoginSession(
@@ -219,12 +206,6 @@ class GateDataLoaderTest {
                     if (session.token == "token-1") throw AuthExpiredException("expired")
                     return "fresh-qr"
                 }
-
-                override fun loadPowerWarning(session: LoginSession): String? = error("unused")
-                override fun loadRoomBalance(
-                    session: LoginSession,
-                    room: RoomReference
-                ): BigDecimal = error("unused")
             },
             nowMillis = { 1_001L }
         )
@@ -241,18 +222,13 @@ class GateDataLoaderTest {
     fun `QR only load requires an existing profile snapshot`() {
         val session = LoginSession("satoken", "token", loginAtMillis = 1_000L)
         val loader = GateDataLoader(
-            api = object : GateApi {
+            api = object : StubGateApi() {
                 override fun login(credentials: Credentials) = session
                 override fun loadCodeInfo(session: LoginSession): CodeInfo {
                     error("QR-only load must not fetch profile data")
                 }
 
                 override fun loadQrCode(session: LoginSession) = "fresh-qr"
-                override fun loadPowerWarning(session: LoginSession): String? = error("unused")
-                override fun loadRoomBalance(
-                    session: LoginSession,
-                    room: RoomReference
-                ): BigDecimal = error("unused")
             },
             nowMillis = { 1_001L }
         )

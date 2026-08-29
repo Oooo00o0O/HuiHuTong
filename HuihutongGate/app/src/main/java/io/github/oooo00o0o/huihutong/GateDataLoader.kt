@@ -20,12 +20,7 @@ class GateDataLoader(
 ) {
     private data class CachedSession(val credentials: Credentials, val session: LoginSession)
 
-    @Volatile
     private var cachedSession: CachedSession? = null
-
-    fun clearSession() {
-        cachedSession = null
-    }
 
     fun loadSupplemental(
         session: LoginSession,

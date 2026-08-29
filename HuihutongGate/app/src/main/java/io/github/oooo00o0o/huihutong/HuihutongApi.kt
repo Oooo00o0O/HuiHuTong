@@ -2,8 +2,6 @@ package io.github.oooo00o0o.huihutong
 
 import org.json.JSONObject
 import java.math.BigDecimal
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -139,14 +137,7 @@ class HuihutongApi(
 
     private fun HttpsURLConnection.readBody(httpCode: Int): String {
         val stream = if (httpCode in 200..299) inputStream else errorStream ?: inputStream
-        return BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { reader ->
-            buildString {
-                while (true) {
-                    val line = reader.readLine() ?: break
-                    append(line)
-                }
-            }
-        }
+        return stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
     }
 
     private fun Map<String, String>.toQueryString(): String {

@@ -32,8 +32,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.roundToInt
 
 class MainActivity : Activity() {
@@ -41,10 +39,10 @@ class MainActivity : Activity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val coreExecutor = Executors.newSingleThreadExecutor()
     private val supplementalExecutor = Executors.newSingleThreadExecutor()
-    private val inFlight = AtomicBoolean(false)
-    private val destroyed = AtomicBoolean(false)
-    private val coreGeneration = AtomicLong(0L)
-    private val supplementalGeneration = AtomicLong(0L)
+    private var inFlight = false
+    private var destroyed = false
+    private var coreGeneration = 0L
+    private var supplementalGeneration = 0L
     private val dateFormat = SimpleDateFormat("yyyy\u5e74MM\u6708dd\u65e5 HH:mm:ss", Locale.CHINA)
     private val queryTimeFormat = SimpleDateFormat("HH:mm", Locale.CHINA)
 
@@ -60,9 +58,9 @@ class MainActivity : Activity() {
     private lateinit var hintText: TextView
     private lateinit var refreshButton: Button
 
-    @Volatile private var settings: AppSettings? = null
-    @Volatile private var currentInfo: CodeInfo? = null
-    @Volatile private var currentSession: LoginSession? = null
+    private var settings: AppSettings? = null
+    private var currentInfo: CodeInfo? = null
+    private var currentSession: LoginSession? = null
     private var previousBrightness: Float = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
 
     private val clockRunnable = object : Runnable {
@@ -76,10 +74,10 @@ class MainActivity : Activity() {
 
     private val refreshRunnable = object : Runnable {
         override fun run() {
-            if (!destroyed.get() && currentInfo != null) {
+            if (!destroyed && currentInfo != null) {
                 refresh(RefreshMode.QR_ONLY)
             }
-            if (!destroyed.get()) mainHandler.postDelayed(this, QR_REFRESH_INTERVAL_MS)
+            if (!destroyed) mainHandler.postDelayed(this, QR_REFRESH_INTERVAL_MS)
         }
     }
 
@@ -112,9 +110,9 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        destroyed.set(true)
-        coreGeneration.incrementAndGet()
-        supplementalGeneration.incrementAndGet()
+        destroyed = true
+        coreGeneration += 1
+        supplementalGeneration += 1
         mainHandler.removeCallbacksAndMessages(null)
         coreExecutor.shutdownNow()
         supplementalExecutor.shutdownNow()
@@ -318,12 +316,12 @@ class MainActivity : Activity() {
         room: RoomReference?,
         generation: Long
     ) {
-        if (destroyed.get()) return
+        if (destroyed) return
         supplementalExecutor.execute {
             dataLoader.loadSupplemental(session, room).forEach { update ->
                 mainHandler.post {
-                    if (!destroyed.get() &&
-                        generation == supplementalGeneration.get() &&
+                    if (!destroyed &&
+                        generation == supplementalGeneration &&
                         session == currentSession
                     ) {
                         when (update) {
@@ -358,7 +356,7 @@ class MainActivity : Activity() {
     }
 
     private fun refresh(mode: RefreshMode) {
-        if (destroyed.get()) return
+        if (destroyed) return
         val infoAtRequest = currentInfo
         if (mode == RefreshMode.QR_ONLY && infoAtRequest == null) return
         val requestSettings = settings
@@ -366,11 +364,14 @@ class MainActivity : Activity() {
             renderNoCredentials()
             return
         }
-        if (!inFlight.compareAndSet(false, true)) return
-        val requestGeneration = coreGeneration.get()
+        if (inFlight) return
+        inFlight = true
+        val requestGeneration = coreGeneration
         val needsFullLoad = mode == RefreshMode.FULL
-        val nextSupplementalGeneration =
-            if (needsFullLoad) supplementalGeneration.incrementAndGet() else null
+        val nextSupplementalGeneration = if (needsFullLoad) {
+            supplementalGeneration += 1
+            supplementalGeneration
+        } else null
         refreshButton.visibility = View.VISIBLE
         refreshButton.isEnabled = false
         hintText.text = if (needsFullLoad) {
@@ -393,9 +394,9 @@ class MainActivity : Activity() {
                     session = core.session
                 )
                 mainHandler.post {
-                    inFlight.set(false)
+                    inFlight = false
                     if (!isCurrentCoreRequest(requestGeneration, requestSettings)) {
-                        if (!destroyed.get() && settings != null) refresh(RefreshMode.FULL)
+                        if (!destroyed && settings != null) refresh(RefreshMode.FULL)
                         return@post
                     }
                     renderCoreSnapshot(snapshot)
@@ -409,9 +410,9 @@ class MainActivity : Activity() {
                 }
             } catch (error: Throwable) {
                 mainHandler.post {
-                    inFlight.set(false)
+                    inFlight = false
                     if (!isCurrentCoreRequest(requestGeneration, requestSettings)) {
-                        if (!destroyed.get() && settings != null) refresh(RefreshMode.FULL)
+                        if (!destroyed && settings != null) refresh(RefreshMode.FULL)
                         return@post
                     }
                     renderError(error)
@@ -421,8 +422,8 @@ class MainActivity : Activity() {
     }
 
     private fun isCurrentCoreRequest(generation: Long, requestSettings: AppSettings): Boolean {
-        return !destroyed.get() &&
-            generation == coreGeneration.get() &&
+        return !destroyed &&
+            generation == coreGeneration &&
             requestSettings == settings
     }
 
@@ -502,10 +503,9 @@ class MainActivity : Activity() {
                 if (parsed == settings) return@setOnClickListener
 
                 saveSettings(parsed)
-                coreGeneration.incrementAndGet()
-                supplementalGeneration.incrementAndGet()
+                coreGeneration += 1
+                supplementalGeneration += 1
                 settings = parsed
-                dataLoader.clearSession()
                 warningText.visibility = View.GONE
                 balanceText.visibility = View.GONE
                 currentInfo = null
