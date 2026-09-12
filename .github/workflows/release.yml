@@ -55,9 +55,9 @@ jobs:
           if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
             echo "Using custom keystore from GitHub Secrets..."
             echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.jks
-            STORE_PASS="${{ secrets.KEYSTORE_PASSWORD }}"
-            KEY_ALIAS="${{ secrets.KEY_ALIAS }}"
-            KEY_PASS="${{ secrets.KEY_PASSWORD }}"
+            STORE_PASS="${{ secrets.KEYSTORE_PASSWORD || 'huihutong123' }}"
+            KEY_ALIAS="${{ secrets.KEY_ALIAS || 'huihutong' }}"
+            KEY_PASS="${{ secrets.KEY_PASSWORD || 'huihutong123' }}"
           else
             echo "Generating release signing key..."
             keytool -genkeypair -v -keystore release.jks -alias huihutong -keyalg RSA -keysize 2048 -validity 10000 \
