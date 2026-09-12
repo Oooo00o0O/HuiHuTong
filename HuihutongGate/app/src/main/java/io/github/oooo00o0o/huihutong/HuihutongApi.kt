@@ -103,8 +103,8 @@ class HuihutongApi : GateApi {
         val url = URL(BASE_URL + path + params.toQueryString())
         val connection = (url.openConnection() as HttpsURLConnection).apply {
             requestMethod = "GET"
-            connectTimeout = 15_000
-            readTimeout = 15_000
+            connectTimeout = 6_000
+            readTimeout = 6_000
             useCaches = false
             setRequestProperty("Accept", "application/json, text/plain, */*")
             setRequestProperty("content-type", "application/json")

@@ -61,7 +61,6 @@ class MainActivity : Activity() {
     private var settings: AppSettings? = null
     private var currentInfo: CodeInfo? = null
     private var currentSession: LoginSession? = null
-    private var previousBrightness: Float = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
 
     private val clockRunnable = object : Runnable {
         override fun run() {
@@ -98,6 +97,15 @@ class MainActivity : Activity() {
         applyHighBrightness()
         startClockLoop()
         if (settings != null) startRefreshLoop()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            applyHighBrightness()
+        } else {
+            restoreBrightness()
+        }
     }
 
     override fun onPause() {
@@ -557,12 +565,19 @@ class MainActivity : Activity() {
     }
 
     private fun applyHighBrightness() {
-        previousBrightness = window.attributes.screenBrightness
-        window.attributes = window.attributes.apply { screenBrightness = 1.0f }
+        val lp = window.attributes
+        if (lp.screenBrightness != 1.0f) {
+            lp.screenBrightness = 1.0f
+            window.attributes = lp
+        }
     }
 
     private fun restoreBrightness() {
-        window.attributes = window.attributes.apply { screenBrightness = previousBrightness }
+        val lp = window.attributes
+        if (lp.screenBrightness != WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE) {
+            lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            window.attributes = lp
+        }
     }
 
     private fun label(text: String, sizeSp: Float, color: Int, typeface: Typeface, gravityValue: Int): TextView {
