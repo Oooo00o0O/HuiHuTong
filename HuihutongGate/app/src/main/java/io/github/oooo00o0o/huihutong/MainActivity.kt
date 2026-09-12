@@ -2,6 +2,8 @@ package io.github.oooo00o0o.huihutong
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.StatusBarManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
@@ -11,7 +13,9 @@ import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.Icon
 import android.graphics.drawable.RippleDrawable
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -473,6 +477,14 @@ class MainActivity : Activity() {
                 linear(-1, -2).apply { topMargin = 18.dp(); bottomMargin = 6.dp() }
             )
             addView(roomRow, linear(-1, 48.dp()))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val addTileBtn = button("添加门禁到控制中心", 13.5f, Color.WHITE, PRIMARY_BLUE).apply {
+                    setOnClickListener {
+                        requestAddToQuickSettings()
+                    }
+                }
+                addView(addTileBtn, linear(-1, 40.dp()).apply { topMargin = 16.dp() })
+            }
         }
 
         val dialog = AlertDialog.Builder(this)
@@ -520,6 +532,26 @@ class MainActivity : Activity() {
             }
         }
         dialog.show()
+    }
+
+    private fun requestAddToQuickSettings() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val statusBarManager = getSystemService(StatusBarManager::class.java)
+            val component = ComponentName(this, GateTileService::class.java)
+            statusBarManager.requestAddTileService(
+                component,
+                getString(R.string.app_name),
+                Icon.createWithResource(this, R.drawable.ic_qs_gate),
+                mainExecutor
+            ) { result ->
+                when (result) {
+                    StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED ->
+                        Toast.makeText(this, "已添加到控制中心", Toast.LENGTH_SHORT).show()
+                    StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED ->
+                        Toast.makeText(this, "控制中心已存在该开关", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
     }
 
     private fun settingsInput(hint: String, value: String, numeric: Boolean = false): EditText {
