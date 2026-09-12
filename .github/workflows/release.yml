@@ -1,0 +1,101 @@
+name: Build and Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release 标签版本（例如 v0.1.0）'
+        required: true
+        default: 'v0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Ensure Android SDK 36 & Build Tools
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          if [ ! -d "$ANDROID_HOME/platforms/android-36" ]; then
+            echo "Installing android-36 and build-tools..."
+            sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          fi
+
+      - name: Build Release APK
+        run: |
+          cd HuihutongGate
+          chmod +x gradlew
+          ./gradlew assembleRelease
+
+      - name: Sign APK
+        run: |
+          cd HuihutongGate
+
+          # 如果在 GitHub 仓库 Secrets 中配置了自定义密钥，则使用自定义密钥；
+          # 否则自动生成固定规范的 Release 签名，确保编译出来的 APK 始终可直接在手机上安装运行。
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "Using custom keystore from GitHub Secrets..."
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.jks
+            STORE_PASS="${{ secrets.KEYSTORE_PASSWORD }}"
+            KEY_ALIAS="${{ secrets.KEY_ALIAS }}"
+            KEY_PASS="${{ secrets.KEY_PASSWORD }}"
+          else
+            echo "Generating release signing key..."
+            keytool -genkeypair -v -keystore release.jks -alias huihutong -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass huihutong123 -keypass huihutong123 -dname "CN=HuiHuTong, OU=Release, O=Oooo00o0O, C=CN"
+            STORE_PASS="huihutong123"
+            KEY_ALIAS="huihutong"
+            KEY_PASS="huihutong123"
+
+            echo "::notice title=Consistent Signing Key::如需后续版本保持相同签名无需卸载更新，可将以下 Base64 存入仓库 Secrets (KEYSTORE_BASE64):"
+            echo "::notice::$(base64 -w 0 release.jks)"
+          fi
+
+          # 寻找最新的 apksigner 工具
+          APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | sort -V | tail -n 1)
+          echo "Found apksigner at: $APKSIGNER"
+
+          # 对打包出的 APK 进行签名
+          RAW_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          $APKSIGNER sign --ks release.jks --ks-key-alias "$KEY_ALIAS" --ks-pass "pass:$STORE_PASS" --key-pass "pass:$KEY_PASS" --out ../HuiHuTong-Gate.apk "$RAW_APK"
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HuiHuTong-Gate-APK
+          path: HuiHuTong-Gate.apk
+
+      - name: Create or Update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag_name }}"
+          fi
+
+          echo "Publishing release for tag: $TAG"
+
+          gh release create "$TAG" HuiHuTong-Gate.apk \
+            --title "HuiHuTong $TAG" \
+            --generate-notes || \
+          gh release upload "$TAG" HuiHuTong-Gate.apk --clobber
