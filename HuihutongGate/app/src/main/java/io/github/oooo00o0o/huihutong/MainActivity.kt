@@ -144,17 +144,16 @@ class MainActivity : Activity() {
         root.addView(View(this).apply {
             background = bottomRounded(HERO_BLUE, 40.dp())
         }, frame(-1, 350.dp(), Gravity.TOP))
-        root.addView(View(this).apply { setBackgroundColor(PRIMARY_BLUE) }, frame(-1, 100.dp(), Gravity.TOP))
-
 
         val scroll = ScrollView(this).apply { clipToPadding = false }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(24.dp(), 136.dp(), 24.dp(), 72.dp())
+            setPadding(24.dp(), CARD_TOP_GAP_DP.dp(), 24.dp(), 72.dp())
         }
         scroll.addView(content, FrameLayout.LayoutParams(-1, -2))
-        root.addView(scroll, frame(-1, -1))
+        val scrollParams = frame(-1, -1).apply { topMargin = TOP_BAR_HEIGHT_DP.dp() }
+        root.addView(scroll, scrollParams)
 
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -198,15 +197,19 @@ class MainActivity : Activity() {
             topMargin = 8.dp()
         })
 
+        val topBar = View(this).apply { setBackgroundColor(PRIMARY_BLUE) }
+        val topBarParams = frame(-1, TOP_BAR_HEIGHT_DP.dp(), Gravity.TOP)
+        root.addView(topBar, topBarParams)
+
         val title = label("\u6211\u7684\u4e8c\u7ef4\u7801", 20f, Color.WHITE, Typeface.DEFAULT_BOLD, Gravity.CENTER)
-        val titleParams = frame(-1, 58.dp(), Gravity.TOP).apply { topMargin = 24.dp() }
+        val titleParams = frame(-1, TOP_BAR_HEIGHT_DP.dp(), Gravity.TOP)
         root.addView(title, titleParams)
 
         val settings = capsuleButton().apply {
             setOnClickListener { showSettingsDialog() }
         }
         val settingsParams = frame(96.dp(), 34.dp(), Gravity.TOP or Gravity.END).apply {
-            topMargin = 28.dp()
+            topMargin = ((TOP_BAR_HEIGHT_DP - 34) / 2).dp()
             rightMargin = 14.dp()
         }
         root.addView(settings, settingsParams)
@@ -233,10 +236,14 @@ class MainActivity : Activity() {
                 @Suppress("DEPRECATION")
                 bottomInset = insets.systemWindowInsetBottom
             }
-            content.setPadding(24.dp(), 112.dp() + topInset, 24.dp(), 72.dp() + bottomInset)
-            titleParams.topMargin = 24.dp() + topInset
+            content.setPadding(24.dp(), CARD_TOP_GAP_DP.dp(), 24.dp(), 72.dp() + bottomInset)
+            scrollParams.topMargin = topInset + TOP_BAR_HEIGHT_DP.dp()
+            scroll.layoutParams = scrollParams
+            topBarParams.height = topInset + TOP_BAR_HEIGHT_DP.dp()
+            topBar.layoutParams = topBarParams
+            titleParams.topMargin = topInset
             title.layoutParams = titleParams
-            settingsParams.topMargin = 28.dp() + topInset
+            settingsParams.topMargin = topInset + ((TOP_BAR_HEIGHT_DP - 34) / 2).dp()
             settings.layoutParams = settingsParams
             nav.setPadding(0, 0, 0, bottomInset)
             navParams.height = 58.dp() + bottomInset
@@ -823,6 +830,8 @@ class MainActivity : Activity() {
         const val QR_REFRESH_INTERVAL_MS = 10_000L
         const val QR_RETRY_INTERVAL_MS = 2_000L
         const val CLOCK_TICK_INTERVAL_MS = 1_000L
+        const val TOP_BAR_HEIGHT_DP = 52
+        const val CARD_TOP_GAP_DP = 18
         val PRIMARY_BLUE: Int = Color.rgb(43, 130, 254)
         val HERO_BLUE: Int = Color.rgb(52, 139, 255)
         val SETTINGS_BLUE: Int = Color.rgb(32, 104, 203)
