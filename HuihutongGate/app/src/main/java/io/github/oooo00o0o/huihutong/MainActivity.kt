@@ -21,6 +21,7 @@ import android.os.Handler
 import android.os.Looper
 import android.text.InputType
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.TouchDelegate
 import android.view.WindowManager
@@ -376,6 +377,7 @@ class MainActivity : Activity() {
         inFlight = true
         val requestGeneration = coreGeneration
         val needsFullLoad = mode == RefreshMode.FULL
+        val isExplicitOrFirst = needsFullLoad || currentInfo == null
         val nextSupplementalGeneration = if (needsFullLoad) {
             supplementalGeneration += 1
             supplementalGeneration
@@ -408,6 +410,9 @@ class MainActivity : Activity() {
                         return@post
                     }
                     renderCoreSnapshot(snapshot)
+                    if (isExplicitOrFirst) {
+                        vibrateConfirm()
+                    }
                     if (nextSupplementalGeneration != null) {
                         loadSupplemental(
                             session = snapshot.session,
@@ -424,9 +429,30 @@ class MainActivity : Activity() {
                         return@post
                     }
                     renderError(error)
+                    if (isExplicitOrFirst) {
+                        vibrateReject()
+                    }
                 }
             }
         }
+    }
+
+    private fun vibrateConfirm() {
+        val feedback = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            HapticFeedbackConstants.CONFIRM
+        } else {
+            HapticFeedbackConstants.CONTEXT_CLICK
+        }
+        window.decorView.performHapticFeedback(feedback, HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING)
+    }
+
+    private fun vibrateReject() {
+        val feedback = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            HapticFeedbackConstants.REJECT
+        } else {
+            HapticFeedbackConstants.LONG_PRESS
+        }
+        window.decorView.performHapticFeedback(feedback, HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING)
     }
 
     private fun isCurrentCoreRequest(generation: Long, requestSettings: AppSettings): Boolean {
