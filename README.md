@@ -1,102 +1,122 @@
-# 慧湖通门禁
+# 慧湖通门禁 (HuiHuTong Gate)
 
-一个非官方的 Android 门禁二维码客户端，用于加载并展示当前用户自己的慧湖通门禁二维码。
+西交利物浦大学（XJTLU）宿舍与校园门禁的极简原生 Android 客户端。
+
+秒级冷启动、下拉控制中心一键拉起、出码清脆震动反馈，彻底告别臃肿卡顿的微信官方小程序，过闸快人一步。
+
+[![Release](https://img.shields.io/github/v/release/Oooo00o0O/HuiHuTong?color=2B82FE&label=Release)](https://github.com/Oooo00o0O/HuiHuTong/releases/latest)
+[![License](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
+[![Android](https://img.shields.io/badge/Android-8.0%2B-green.svg)](https://developer.android.com)
+[![Size](https://img.shields.io/badge/APK%20Size-%3C%201%20MB-success.svg)](https://github.com/Oooo00o0O/HuiHuTong/releases)
 
 > [!IMPORTANT]
-> 本项目不是西交利物浦大学或“慧湖通”的官方应用，也未得到其认可或授权。门禁属于安全敏感场景；请优先使用官方服务，并且只使用你本人有权使用的账号和门禁权限。
+> 本项目为开源第三方客户端，非西交利物浦大学或“慧湖通”官方出品。门禁属于安全敏感场景，所有凭据仅保存在手机本地，直接与官方服务通信，请仅使用你本人合法拥有的门禁账号。
 
-## 主要功能
+---
 
-- 显示用户、住址和门禁权限信息
-- 生成并定时刷新门禁二维码
-- 支持手动刷新二维码和用户信息
-- 显示服务返回的余额不足提醒
-- 可选显示指定 Apartment ID 和 Room ID 的房间余额
-- 打开二维码页面时自动提高屏幕亮度
+## 核心亮点
 
-## 使用前准备
+- ⚡ **极致轻量，秒开即用**：体积不足 1 MB，没有任何臃肿的跨平台框架，原生纯代码渲染，冷启动毫秒级。
+- 🎛️ **下拉控制中心磁贴（Quick Settings）**：支持 Android 原生快捷开关，在任何 App 或锁屏状态下，下拉屏幕点一下磁贴秒出码，无需回到桌面找图标。
+- 📳 **触觉微震动反馈**：
+  - 二维码首次就绪 / 手动刷新成功：手心清脆一震（`Confirm` 触感），走路盲操无需死盯屏幕；
+  - 弱网 / 阻断性报错：顿挫双震警示（`Reject` 触感），避免未出码直接撞闸；
+  - 每 10 秒静默轮询更新：完全静音，零打扰。
+- 💡 **屏幕亮度自适应锁定**：进入前台自动拉满 100% 亮度便于闸机光学识别；切后台或下拉状态栏自动恢复系统原有亮度。
+- 🔋 **房间电费余额**：可选显示对应宿舍房间的实时电费余额及低电预警。
+- 🛡️ **绝对私密安全**：零云端后台、零埋点分析，Open ID 等凭据仅存放在设备私有沙盒存储内。
 
-你需要：
+---
 
-- Android 8.0（API 26）或更高版本的设备
-- 可访问目标服务的网络连接
-- 你本人合法取得的 `Open ID`
-- 可选的 `Union ID`
-- 如需查询房间余额，还需要对应的 `Apartment ID` 和 `Room ID`
+## 下载安装
 
-本应用不会为你创建、查找或提取这些参数，也不提供任何其他用户的凭据。
+前往 [GitHub Releases 页面](https://github.com/Oooo00o0O/HuiHuTong/releases/latest)，下载最新的 `HuiHuTong-Gate.apk` 安装即可。
 
-## 安装
+*注：项目已配置永久固化签名，后续有新版本时直接下载覆盖安装即可，无需卸载，配置参数不会丢失。*
 
-目前仓库尚未发布预编译安装包。开发者或能够自行构建 Android 项目的用户可以按照下方的“从源代码构建”进行安装。
+---
 
-将来若发布安装包，请只从本仓库的 [Releases](https://github.com/Oooo00o0O/HuiHuTong/releases) 页面下载，并在安装前核对来源。不要安装他人重新打包的未知 APK。
+## 3 分钟小白指南：如何获取你的 Open ID？
 
-## 使用方法
+由于微信体系的机制，每个用户在“慧湖通”小程序中都有一个专属的唯一身份标识码（`Open ID`，一串以字母 `o` 开头的 28 位字符串）。
+**只需在电脑上花 2 分钟抓取一次并填入，后续永久生效。**
 
-1. 安装并打开“慧湖通门禁”。
-2. 首次启动时，在弹出的设置窗口中分别填写参数：`Open ID` 必填，`Union ID` 可选。
-3. 如需显示房间余额，在同一行的两个输入框中分别填写 `Apartment ID` 和 `Room ID`。只有两者均已填写时才启用房间余额。
-4. 点击“保存”，等待用户信息和二维码加载。
-5. 应用会定时刷新二维码；需要时也可以点击“手动刷新”。房间余额仅在启动和手动刷新时查询。
-6. 如需更换参数，点击页面右上角的“设置”。
+### 推荐方案：电脑端提取（Windows / macOS，最简单，免任何权限折腾）
 
-所有输入框只接受对应参数的直接值，不接受 JSON 或查询字符串。Apartment ID 和 Room ID 如有填写，必须是大于零的整数；只填写其中一个时会保留该值，但不会启用房间余额。
+电脑端微信运行在 Chromium 内核中，走系统标准网络代理，是获取 Open ID 最不易出错的方式。
 
-房间余额来自账务系统，可能每天只更新数次，并非实时读数。界面中的“查询于”表示应用请求接口的时间，不代表账务系统更新余额的时间。
+1. **下载抓包工具**：
+   - 推荐使用免费的 **Reqable**（[官网下载](https://reqable.com/)，有全中文界面，轻量且好用）。
+2. **初始化证书**：
+   - 打开 Reqable，点击顶部的「启动调试」或证书安装提示，按指引点击「一键安装到系统根证书」。
+3. **打开微信小程序**：
+   - 在电脑端打开「微信」并登录；
+   - 点击打开「慧湖通」小程序，进入「门禁二维码」页面。
+4. **获取 Open ID**：
+   - 回到 Reqable，在抓到的网络请求列表中搜索关键词 `215123`；
+   - 找到类似 `https://api.215123.cn/web-app/auth/certificateLogin` 的请求；
+   - 点击该请求，在 URL 参数（Query）或响应体中可以看到 `openId`（例如 `oUpwt...` 这一串字符）；
+   - 将这串值复制出来，填入本应用的 Open ID 输入框并保存即可！
 
-## 隐私与安全
+---
 
-- 仓库不包含 API 密钥、真实 Open ID、Union ID、Apartment ID、Room ID 或登录令牌。
-- 你输入的参数保存在 Android 的应用私有存储中，不会发送给本项目作者。
-- 登录和二维码请求会通过 HTTPS 直接发送到应用所配置的目标服务（当前为 `api.215123.cn`）。
-- 参数并未使用独立的应用级加密，请将设备锁屏并避免在 Root、共享或不受信任的设备上保存参数。
-- 请勿截图、转发二维码或分享账号参数。发现参数泄露时，请停止使用并通过相应的官方渠道处理。
+### 备用方案：iPhone 用户提取（iOS，无需电脑）
 
-## 从源代码构建
+如果你或你的室友使用的是 iPhone，可以通过苹果商店免费工具快速获取：
 
-构建需要最新版 Android Studio、Android SDK 36，以及 Android Studio 自带的兼容 JDK。
+1. 在 App Store 搜索并安装 **Stream**（免费网络抓包工具）。
+2. 打开 Stream，点击「开始抓包」（首次会提示在 iPhone「设置 -> 通用 -> 关于本机 -> 证书信任设置」中信任 Stream 根证书）。
+3. 打开微信，进入「慧湖通」小程序并展示门禁二维码。
+4. 回到 Stream 点击「停止抓包」，进入「抓包历史」搜索 `215123`。
+5. 点开对应请求，复制里面的 `openId` 参数。
 
-1. 克隆仓库：
+---
 
-   ```bash
-   git clone https://github.com/Oooo00o0O/HuiHuTong.git
-   cd HuiHuTong/HuihutongGate
-   ```
+### 可选：如何获取房间电费编号？
 
-2. 使用 Android Studio 打开 `HuihutongGate` 目录并等待 Gradle Sync 完成。
-3. 在 Android Studio 中运行应用；也可以使用 Gradle Wrapper 构建 Debug APK：
+如需在门禁码下方顺带显示宿舍电费：
+- 在上述同一个抓包请求（或房间信息接口）中，可以一并看到 `apartmentId` 和 `roomId`（均为大于 0 的数字编号）；
+- 在本应用「设置」弹窗的“房间余额”一栏中分别填入这两个数字保存即可。
 
-   Windows：
+---
 
-   ```powershell
-   .\gradlew.bat assembleDebug
-   ```
+## 进阶技巧：启用下拉控制中心一秒刷码
 
-   macOS/Linux：
+安装并配置完成后，强烈推荐将它添加到手机下拉快捷面板中：
 
-   ```bash
-   ./gradlew assembleDebug
-   ```
+- **方式一（应用内一键添加，推荐）**：
+  打开应用，点击右上角胶囊按钮进入「设置」，点击最下方的 **【添加门禁到控制中心】**，在系统弹窗中点击“添加”即可（支持 Android 13+ 及小米澎湃OS / MIUI）。
+- **方式二（系统控制中心手动添加）**：
+  从手机屏幕右上角向下拉出控制中心，点击右上角「编辑（铅笔图标 ✏️）」，在下方的“未添加的开关”中找到 **“慧湖通门禁”**，点击加号将其拖动到常用开关栏。
 
-4. 构建结果位于：
+之后过闸时，无需解锁找图标，手指向下一滑点一下，二维码即刻呈现。
 
-   ```text
-   app/build/outputs/apk/debug/app-debug.apk
-   ```
+---
 
-本机 Android SDK 路径应写在未纳入版本控制的 `local.properties` 中，不要提交该文件。
+## 本地构建
 
-## 已知限制
+如果你希望自行从源代码构建：
 
-- 依赖非公开且可能变化的服务接口，服务升级后应用可能失效。
-- 目前没有正式发布或自动更新机制。
-- 这不是官方凭据恢复工具，也不能为没有门禁权限的账号增加权限。
+```bash
+git clone https://github.com/Oooo00o0O/HuiHuTong.git
+cd HuiHuTong/HuihutongGate
+
+# Windows
+.\gradlew.bat assembleRelease
+
+# Linux / macOS
+chmod +x gradlew
+./gradlew assembleRelease
+```
+
+构建结果位于：`app/build/outputs/apk/release/`
+
+本项目配置了完整的 GitHub Actions CI/CD，打上 `v*` 格式的 tag 推送即可在云端全自动构建并发布签名安装包。
+
+---
 
 ## 许可证
 
-除第三方许可另有说明的代码外，本项目代码以 [GNU General Public License v3.0 only](LICENSE) 发布。分发本项目或其修改版本时，必须遵守 GPL-3.0 的源代码和许可证要求。
+本项目依据 [GNU General Public License v3.0](LICENSE) 开源。
 
-内置二维码编码器的部分实现改编自 MIT 许可的 Project Nayuki QR Code generator；完整版权和许可声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
-
-GPL 仅适用于本项目作者有权许可的代码，不授予任何第三方服务、接口、名称、商标、数据或素材的权利。
+内置二维码算法改编自 Project Nayuki's QR Code generator（采用 MIT 许可，完整声明详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)）。
