@@ -9,6 +9,10 @@
 [![Android](https://img.shields.io/badge/Android-8.0%2B-green.svg)](https://developer.android.com)
 [![Size](https://img.shields.io/badge/APK%20Size-%3C%201%20MB-success.svg)](https://github.com/Oooo00o0O/HuiHuTong/releases)
 
+<p align="center">
+  <img src="assets/screenshot.jpg" width="280" alt="应用界面预览" />
+</p>
+
 > [!IMPORTANT]
 > 本项目为开源第三方客户端，非西交利物浦大学或“慧湖通”官方出品。门禁属于安全敏感场景，所有凭据仅保存在手机本地，直接与官方服务通信，请仅使用你本人合法拥有的门禁账号。
 
