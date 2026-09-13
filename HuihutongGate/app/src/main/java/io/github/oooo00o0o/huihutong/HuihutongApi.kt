@@ -115,27 +115,12 @@ class HuihutongApi : GateApi {
 
         val httpCode = connection.responseCode
         val body = connection.readBody(httpCode)
-        val json = try {
-            JSONObject(body)
-        } catch (error: Exception) {
-            throw ApiException("接口返回不是 JSON：HTTP $httpCode")
-        }
-
-        if (httpCode == HttpURLConnection.HTTP_UNAUTHORIZED || json.optInt("code", 0) == 401) {
-            throw AuthExpiredException(json.messageOr("认证已失效"))
-        }
-
-        val okBySuccess = !json.has("success") || json.optBoolean("success", false)
-        val okByCode = !json.has("code") || json.optInt("code", 200) in 200..299
-        if (httpCode !in 200..299 || !okBySuccess || !okByCode) {
-            throw ApiException(json.messageOr("请求失败：HTTP $httpCode"))
-        }
-        return json
+        return parseApiResponse(httpCode, body)
     }
 
     private fun HttpsURLConnection.readBody(httpCode: Int): String {
-        val stream = if (httpCode in 200..299) inputStream else errorStream ?: inputStream
-        return stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+        val stream = if (httpCode in 200..299) inputStream else errorStream
+        return stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
     }
 
     private fun Map<String, String>.toQueryString(): String {
@@ -148,22 +133,49 @@ class HuihutongApi : GateApi {
     private fun String.urlEncode(): String =
         URLEncoder.encode(this, Charsets.UTF_8.name())
 
-    private fun JSONObject.firstString(vararg names: String): String {
-        for (name in names) {
-            val value = optString(name, "").trim()
-            if (value.isNotEmpty()) return value
-        }
-        return ""
-    }
-
-    private fun JSONObject.messageOr(defaultMessage: String): String {
-        return firstString("message", "msg", "error").ifBlank { defaultMessage }
-    }
-
     private companion object {
         const val BASE_URL = "https://api.215123.cn"
         const val REFERER = "https://servicewechat.com/wx2660b404a3b7575a/158/page-frame.html"
         const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Mobile MicroMessenger/8.0.50 MiniProgramEnv/android"
     }
+}
+
+internal fun parseApiResponse(httpCode: Int, body: String): JSONObject {
+    if (httpCode == HttpURLConnection.HTTP_UNAUTHORIZED) {
+        val message = try {
+            JSONObject(body).messageOr("认证已失效")
+        } catch (_: Exception) {
+            "认证已失效"
+        }
+        throw AuthExpiredException(message)
+    }
+    val json = try {
+        JSONObject(body)
+    } catch (_: Exception) {
+        throw HuihutongApi.ApiException("接口返回不是 JSON：HTTP $httpCode")
+    }
+
+    if (json.optInt("code", 0) == 401) {
+        throw AuthExpiredException(json.messageOr("认证已失效"))
+    }
+
+    val okBySuccess = !json.has("success") || json.optBoolean("success", false)
+    val okByCode = !json.has("code") || json.optInt("code", 200) in 200..299
+    if (httpCode !in 200..299 || !okBySuccess || !okByCode) {
+        throw HuihutongApi.ApiException(json.messageOr("请求失败：HTTP $httpCode"))
+    }
+    return json
+}
+
+private fun JSONObject.firstString(vararg names: String): String {
+    for (name in names) {
+        val value = optString(name, "").trim()
+        if (value.isNotEmpty()) return value
+    }
+    return ""
+}
+
+private fun JSONObject.messageOr(defaultMessage: String): String {
+    return firstString("message", "msg", "error").ifBlank { defaultMessage }
 }

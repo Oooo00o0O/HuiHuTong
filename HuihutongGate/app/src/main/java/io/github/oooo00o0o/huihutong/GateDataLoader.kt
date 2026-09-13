@@ -8,7 +8,8 @@ sealed interface SupplementalUpdate {
 data class CoreLoad(
     val info: CodeInfo,
     val qrPayload: String,
-    val session: LoginSession
+    val session: LoginSession,
+    val reusedPreviousQr: Boolean = false
 )
 
 private const val TOKEN_REUSE_MS = 50_000L
@@ -45,29 +46,37 @@ class GateDataLoader(
     fun loadCore(
         credentials: Credentials,
         full: Boolean,
-        currentInfo: CodeInfo?
+        currentInfo: CodeInfo?,
+        previousQrPayload: String? = null
     ): CoreLoad {
         return try {
-            loadCoreWithSession(ensureSession(credentials), full, currentInfo)
+            loadCoreWithSession(ensureSession(credentials), full, currentInfo, previousQrPayload)
         } catch (expired: AuthExpiredException) {
             cachedSession = null
-            loadCoreWithSession(ensureSession(credentials), full, currentInfo)
+            loadCoreWithSession(ensureSession(credentials), full, currentInfo, previousQrPayload)
         }
     }
 
     private fun loadCoreWithSession(
         activeSession: LoginSession,
         full: Boolean,
-        currentInfo: CodeInfo?
+        currentInfo: CodeInfo?,
+        previousQrPayload: String?
     ): CoreLoad {
         val info = if (full) {
             api.loadCodeInfo(activeSession)
         } else {
             requireNotNull(currentInfo) { "QR-only loads require an existing profile snapshot" }
         }
-        val qrPayload = api.loadQrCode(activeSession).ifBlank { info.qrCode }
+        val loadedQrPayload = api.loadQrCode(activeSession).trim()
+        val reusedPreviousQr = loadedQrPayload.isEmpty() && !full && !previousQrPayload.isNullOrBlank()
+        val qrPayload = when {
+            loadedQrPayload.isNotEmpty() -> loadedQrPayload
+            full -> info.qrCode
+            else -> previousQrPayload.orEmpty()
+        }
         require(qrPayload.isNotBlank()) { "接口没有返回二维码内容" }
-        return CoreLoad(info, qrPayload, activeSession)
+        return CoreLoad(info, qrPayload, activeSession, reusedPreviousQr)
     }
 
     private fun ensureSession(credentials: Credentials): LoginSession {

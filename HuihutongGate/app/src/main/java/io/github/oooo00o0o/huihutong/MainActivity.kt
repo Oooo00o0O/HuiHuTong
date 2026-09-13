@@ -25,6 +25,7 @@ import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.TouchDelegate
 import android.view.WindowManager
+import android.view.WindowInsets
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -45,6 +46,7 @@ class MainActivity : Activity() {
     private val coreExecutor = Executors.newSingleThreadExecutor()
     private val supplementalExecutor = Executors.newSingleThreadExecutor()
     private var inFlight = false
+    private var resumed = false
     private var destroyed = false
     private var coreGeneration = 0L
     private var supplementalGeneration = 0L
@@ -66,6 +68,7 @@ class MainActivity : Activity() {
     private var settings: AppSettings? = null
     private var currentInfo: CodeInfo? = null
     private var currentSession: LoginSession? = null
+    private var currentQrPayload: String? = null
 
     private val clockRunnable = object : Runnable {
         override fun run() {
@@ -78,15 +81,16 @@ class MainActivity : Activity() {
 
     private val refreshRunnable = object : Runnable {
         override fun run() {
-            if (!destroyed && currentInfo != null) {
+            if (!destroyed && resumed && currentInfo != null) {
                 refresh(RefreshMode.QR_ONLY)
             }
-            if (!destroyed) mainHandler.postDelayed(this, QR_REFRESH_INTERVAL_MS)
+            if (!destroyed && resumed) mainHandler.postDelayed(this, QR_REFRESH_INTERVAL_MS)
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         buildUi()
         settings = loadSettings()
         if (settings == null) {
@@ -99,9 +103,13 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        resumed = true
         applyHighBrightness()
         startClockLoop()
-        if (settings != null) startRefreshLoop()
+        if (settings != null) {
+            if (currentInfo != null) refresh(RefreshMode.QR_ONLY)
+            scheduleRefresh(QR_REFRESH_INTERVAL_MS)
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -115,6 +123,7 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
+        resumed = false
         mainHandler.removeCallbacks(refreshRunnable)
         mainHandler.removeCallbacks(clockRunnable)
         restoreBrightness()
@@ -189,18 +198,18 @@ class MainActivity : Activity() {
             topMargin = 8.dp()
         })
 
-        root.addView(
-            label("\u6211\u7684\u4e8c\u7ef4\u7801", 20f, Color.WHITE, Typeface.DEFAULT_BOLD, Gravity.CENTER),
-            frame(-1, 58.dp(), Gravity.TOP).apply { topMargin = 48.dp() }
-        )
+        val title = label("\u6211\u7684\u4e8c\u7ef4\u7801", 20f, Color.WHITE, Typeface.DEFAULT_BOLD, Gravity.CENTER)
+        val titleParams = frame(-1, 58.dp(), Gravity.TOP).apply { topMargin = 24.dp() }
+        root.addView(title, titleParams)
 
         val settings = capsuleButton().apply {
             setOnClickListener { showSettingsDialog() }
         }
-        root.addView(settings, frame(96.dp(), 34.dp(), Gravity.TOP or Gravity.END).apply {
-            topMargin = 52.dp()
+        val settingsParams = frame(96.dp(), 34.dp(), Gravity.TOP or Gravity.END).apply {
+            topMargin = 28.dp()
             rightMargin = 14.dp()
-        })
+        }
+        root.addView(settings, settingsParams)
         settings.post {
             val touchBounds = Rect().also(settings::getHitRect)
             val verticalExpansion = ((48.dp() - settings.height).coerceAtLeast(0)) / 2
@@ -208,9 +217,34 @@ class MainActivity : Activity() {
             root.touchDelegate = TouchDelegate(touchBounds, settings)
         }
 
-
-        root.addView(bottomNav(), frame(-1, 58.dp(), Gravity.BOTTOM))
+        val nav = bottomNav()
+        val navParams = frame(-1, 58.dp(), Gravity.BOTTOM)
+        root.addView(nav, navParams)
+        root.setOnApplyWindowInsetsListener { _, insets ->
+            val topInset: Int
+            val bottomInset: Int
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val systemBars = insets.getInsets(WindowInsets.Type.systemBars())
+                topInset = systemBars.top
+                bottomInset = systemBars.bottom
+            } else {
+                @Suppress("DEPRECATION")
+                topInset = insets.systemWindowInsetTop
+                @Suppress("DEPRECATION")
+                bottomInset = insets.systemWindowInsetBottom
+            }
+            content.setPadding(24.dp(), 112.dp() + topInset, 24.dp(), 72.dp() + bottomInset)
+            titleParams.topMargin = 24.dp() + topInset
+            title.layoutParams = titleParams
+            settingsParams.topMargin = 28.dp() + topInset
+            settings.layoutParams = settingsParams
+            nav.setPadding(0, 0, 0, bottomInset)
+            navParams.height = 58.dp() + bottomInset
+            nav.layoutParams = navParams
+            insets
+        }
         setContentView(root)
+        root.requestApplyInsets()
     }
 
     private fun profileBlock(): View {
@@ -266,7 +300,7 @@ class MainActivity : Activity() {
         val color = if (selected) PRIMARY_BLUE else NAV_GRAY
         return label(text, 12f, color, if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT, Gravity.CENTER).apply {
             setCompoundDrawablesWithIntrinsicBounds(0, iconRes, 0, 0)
-            compoundDrawablePadding = 0
+            compoundDrawablePadding = (-2).dp()
             includeFontPadding = false
             compoundDrawableTintList = ColorStateList.valueOf(color)
         }
@@ -359,14 +393,17 @@ class MainActivity : Activity() {
         mainHandler.post(clockRunnable)
     }
 
-    private fun startRefreshLoop() {
+    private fun scheduleRefresh(delayMillis: Long) {
         mainHandler.removeCallbacks(refreshRunnable)
-        mainHandler.postDelayed(refreshRunnable, QR_REFRESH_INTERVAL_MS)
+        if (!destroyed && resumed) {
+            mainHandler.postDelayed(refreshRunnable, delayMillis)
+        }
     }
 
     private fun refresh(mode: RefreshMode) {
         if (destroyed) return
         val infoAtRequest = currentInfo
+        val qrPayloadAtRequest = currentQrPayload
         if (mode == RefreshMode.QR_ONLY && infoAtRequest == null) return
         val requestSettings = settings
         if (requestSettings == null) {
@@ -395,7 +432,8 @@ class MainActivity : Activity() {
                 val core = dataLoader.loadCore(
                     requestSettings.credentials,
                     needsFullLoad,
-                    infoAtRequest
+                    infoAtRequest,
+                    qrPayloadAtRequest
                 )
                 val snapshot = CoreSnapshot(
                     info = core.info,
@@ -410,6 +448,10 @@ class MainActivity : Activity() {
                         return@post
                     }
                     renderCoreSnapshot(snapshot)
+                    currentQrPayload = core.qrPayload
+                    if (core.reusedPreviousQr) {
+                        scheduleRefresh(QR_RETRY_INTERVAL_MS)
+                    }
                     if (isExplicitOrFirst) {
                         vibrateConfirm()
                     }
@@ -429,6 +471,9 @@ class MainActivity : Activity() {
                         return@post
                     }
                     renderError(error)
+                    if (mode == RefreshMode.QR_ONLY) {
+                        scheduleRefresh(QR_RETRY_INTERVAL_MS)
+                    }
                     if (isExplicitOrFirst) {
                         vibrateReject()
                     }
@@ -552,8 +597,9 @@ class MainActivity : Activity() {
                 balanceText.visibility = View.GONE
                 currentInfo = null
                 currentSession = null
+                currentQrPayload = null
                 refresh(RefreshMode.FULL)
-                startRefreshLoop()
+                scheduleRefresh(QR_REFRESH_INTERVAL_MS)
                 Toast.makeText(this, "\u53c2\u6570\u5df2\u4fdd\u5b58", Toast.LENGTH_SHORT).show()
             }
         }
@@ -635,6 +681,19 @@ class MainActivity : Activity() {
         if (lp.screenBrightness != WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE) {
             lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             window.attributes = lp
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun enableEdgeToEdge() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.setDecorFitsSystemWindows(false)
+        } else {
+            window.decorView.systemUiVisibility =
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
         }
     }
 
@@ -762,6 +821,7 @@ class MainActivity : Activity() {
         const val KEY_APARTMENT_ID = "apartment_id"
         const val KEY_ROOM_ID = "room_id"
         const val QR_REFRESH_INTERVAL_MS = 10_000L
+        const val QR_RETRY_INTERVAL_MS = 2_000L
         const val CLOCK_TICK_INTERVAL_MS = 1_000L
         val PRIMARY_BLUE: Int = Color.rgb(43, 130, 254)
         val HERO_BLUE: Int = Color.rgb(52, 139, 255)

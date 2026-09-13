@@ -217,6 +217,35 @@ class GateDataLoaderTest {
     }
 
     @Test
+    fun `QR only load reuses the latest successful QR when the endpoint returns empty`() {
+        val session = LoginSession("satoken", "token", loginAtMillis = 1_000L)
+        val existingInfo = CodeInfo(
+            apartment = "A05 201",
+            name = "User",
+            companyName = "XJTLU",
+            permissionText = "Allowed",
+            qrCode = "initial-profile-qr"
+        )
+        val loader = GateDataLoader(
+            api = object : StubGateApi() {
+                override fun login(credentials: Credentials) = session
+                override fun loadQrCode(session: LoginSession) = ""
+            },
+            nowMillis = { 1_001L }
+        )
+
+        val result = loader.loadCore(
+            credentials = Credentials("open-id", "union-id"),
+            full = false,
+            currentInfo = existingInfo,
+            previousQrPayload = "latest-successful-qr"
+        )
+
+        assertEquals("latest-successful-qr", result.qrPayload)
+        assertEquals(true, result.reusedPreviousQr)
+    }
+
+    @Test
     fun `QR only load requires an existing profile snapshot`() {
         val session = LoginSession("satoken", "token", loginAtMillis = 1_000L)
         val loader = GateDataLoader(
